@@ -1,0 +1,24 @@
+.DS_Store
+.data/
+.docs/
+.dump/
+.idea/
+.sass-cache/
+coverage/
+journal/
+node_modules/
+
+npm-debug.log
+package-lock.json
+
+*.db
+*.iml
+*.rdb
+*.zip
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+.todo.md
