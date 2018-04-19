@@ -7,10 +7,13 @@
  *
  * @requires ./Error.nucleus
  * @requires ./Resource.nucleus
+ * @requires ./validator.nucleus
  */
 
 const NucleusError = require('./Error.nucleus');
 const NucleusResource = require('./Resource.nucleus');
+
+const nucleusValidator = require('./validator.nucleus');
 
 /**
  * @module NucleusEvent
@@ -44,7 +47,7 @@ class NucleusEvent extends NucleusResource {
   constructor (eventName, eventMessage = {}, options = {}) {
     if (arguments.length === 1 && arguments[0] instanceof NucleusEvent) return arguments[0];
     else {
-      if (!eventName || eventName === '') throw new NucleusError.UndefinedValueNucleusError("The event name is mandatory.");
+      if (!nucleusValidator.isString(eventName) || nucleusValidator.isEmpty(eventName)) throw new NucleusError.UndefinedValueNucleusError("The event name is mandatory.");
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 

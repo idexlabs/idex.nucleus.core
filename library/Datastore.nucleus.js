@@ -8,12 +8,15 @@
  * @requires NPM:bluebird
  * @requires NPM:redis
  * @requires ./Error.nucleus
+ * @requires ./validator.nucleus
  */
 
 const Promise = require('bluebird');
 const redis = require('redis');
 
 const NucleusError = require('./Error.nucleus');
+
+const nucleusValidator = require('./validator.nucleus');
 
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
@@ -26,18 +29,18 @@ class NucleusDatastore {
    * Creates a Redis client. The constructor returns a Proxy that interfaces the class and a Promise that resolves once
    * the server is connected.
    *
-   * @argument {String} name
+   * @argument {String} datastoreName
    * @argument {Object} options
-   * @argument {Number} [options.index]
-   * @argument {Number} [options.port]
-   * @argument {String} [options.URL]
+   * @argument {Number} [options.index=0]
+   * @argument {Number} [options.port=6379]
+   * @argument {String} [options.URL="localhost"]
    *
    * @returns {Proxy}
    */
-  constructor (name = 'Untitled', options = {}) {
+  constructor (datastoreName = 'Untitled', options = {}) {
     const { index: datastoreIndex = 0, port: datastorePort = 6379, URL: datastoreURL = 'localhost' } = options;
 
-    this.name = name;
+    this.name = datastoreName;
     this.datastoreIndex = datastoreIndex;
 
     this.$$server = redis.createClient({
@@ -81,12 +84,12 @@ class NucleusDatastore {
    * @throws Will throw an error if an inconsistent list of item field and item is passed.
    */
   addItemToHashByName (itemKey, ...hashList) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
 
     if (hashList.length === 2) {
       const [ itemField, item ] = hashList;
 
-      if (typeof itemField !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string."));
+      if (typeof itemField !== 'string') throw new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string.");
 
       const stringifiedItem = NucleusDatastore.stringifyItem(item);
 
@@ -100,7 +103,7 @@ class NucleusDatastore {
         });
 
       return this.$$server.hmsetAsync(itemKey, hashList);
-    } else return Promise.reject(new NucleusError.UndefinedContextNucleusError("The number of item field and item provided is inconsistent"));
+    } else throw new NucleusError.UndefinedContextNucleusError("The number of item field and item provided is inconsistent");
   }
 
   /**
@@ -115,8 +118,8 @@ class NucleusDatastore {
    * @throws Will throw an error if the item is not a string.
    */
   addItemToSet (itemKey, item) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string."));
-    if (typeof item !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(item)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item must be a string.");
 
     const stringifiedItem = NucleusDatastore.stringifyItem(item);
 
@@ -140,10 +143,10 @@ class NucleusDatastore {
    * @throws Will throw an error if the object is not a string.
    */
   addTripleToHexastore (itemKey, subject, predicate, object) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string."));
-    if (typeof subject !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The subject must be a string."));
-    if (typeof predicate !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The predicate must be a string."));
-    if (typeof object !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The object must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(subject)) throw new NucleusError.UnexpectedValueTypeNucleusError("The subject must be a string.");
+    if (!nucleusValidator.isString(predicate)) throw new NucleusError.UnexpectedValueTypeNucleusError("The predicate must be a string.");
+    if (!nucleusValidator.isString(object)) throw new NucleusError.UnexpectedValueTypeNucleusError("The object must be a string.");
 
     /*
     ZADD myindex 0 spo:antirez:is-friend-of:matteocollina
@@ -175,12 +178,22 @@ class NucleusDatastore {
    * @throws Will throw an error if the item key is missing or an empty string.
    */
   createItem (itemKey, item) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
 
     const stringifiedItem = NucleusDatastore.stringifyItem(item);
 
     return this.$$server.setAsync(itemKey, stringifiedItem)
       .return(item);
+  }
+
+  /**
+   * Destroys the Redis connection.
+   *
+   * @returns {Promise}
+   */
+  destroy () {
+
+    return this.$$server.quitAsync();
   }
 
   /**
@@ -223,8 +236,8 @@ class NucleusDatastore {
    * @throws Will throw an error if the item is not a string.
    */
   itemIsMemberOfSet (itemKey, item) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string."));
-    if (typeof item !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item to retrieve must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
+    if (!nucleusValidator.isString(item)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item to retrieve must be a string.");
 
     const stringifiedItem = NucleusDatastore.stringifyItem(item);
 
@@ -245,7 +258,7 @@ class NucleusDatastore {
    * @throws Will throw an error if the item key is missing or an empty string.
    */
   removeItemByName (itemKey) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
 
     return this.$$server.delAsync(itemKey)
       .return(null);
@@ -263,8 +276,8 @@ class NucleusDatastore {
    * @throws Will throw an error if the item field is missing or an empty string.
    */
   removeItemFromFieldByName (itemKey, itemField) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string."));
-    if (typeof itemField !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(itemField)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string.");
 
     return this.$$server.hdelAsync(itemKey, itemField)
       .return(null);
@@ -280,7 +293,7 @@ class NucleusDatastore {
    * @throws Will throw an error if the item key is missing or an empty string.
    */
   retrieveItemByName (itemKey) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
 
     return this.$$server.getAsync(itemKey)
       .then(NucleusDatastore.parseItem);
@@ -298,8 +311,8 @@ class NucleusDatastore {
    * @throws Will throw an error if the item field is missing or an empty string.
    */
   retrieveItemFromFieldByName (itemKey, itemField) {
-    if (typeof itemKey !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string."));
-    if (typeof itemField !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string."));
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(itemField)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string.");
 
     return this.$$server.hgetAsync(itemKey, itemField)
       .then(NucleusDatastore.parseItem);

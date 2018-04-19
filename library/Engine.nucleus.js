@@ -11,6 +11,7 @@
  * @requires ./Datastore.nucleus
  * @requires ./Error.nucleus
  * @requires ./Event.nucleus
+ * @requires ./validator.nucleus
  */
 
 const Promise = require('bluebird');
@@ -21,13 +22,28 @@ const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
 
-const ActionQueueNameByActionName = 'ActionQueueNameByActionName';
-const ActionQueueNameSet = 'ActionQueueNameSet';
+const nucleusValidator = require('./validator.nucleus');
+
+const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
+const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
+const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
 
 class NucleusEngine {
 
-  constructor (engineName, options) {
-    const { $actionDatastore, $engineDatastore, $eventDatastore } = options;
+  /**
+   * Creates a Nucleus engine. The constructor returns a Proxy that interfaces the class and a Promise that resolves once
+   * the engine is ready. If no datastore is passed in the option, a default connection will be created.
+   *
+   * @argument {String} name
+   * @argument {Object} options
+   * @argument {NucleusDatastore} [options.$actionDatastore]
+   * @argument {NucleusDatastore} [options.$engineDatastore]
+   * @argument {NucleusDatastore} [options.$eventDatastore]
+   *
+   * @returns {Proxy}
+   */
+  constructor (engineName, options = {}) {
+    const { $actionDatastore = new NucleusDatastore(), $engineDatastore = new NucleusDatastore(), $eventDatastore = new NucleusDatastore() } = options;
 
     /** @member {String} ID */
     Reflect.defineProperty(this, 'ID', { value: uuid.v1(), writable: false });
@@ -37,7 +53,7 @@ class NucleusEngine {
     this.$actionDatastore = $actionDatastore;
     this.$engineDatastore = this.$datastore = $engineDatastore;
     this.$eventDatastore = $eventDatastore;
-    this.$eventSubscriberDatastore = $eventDatastore.duplicateConnection();
+    this.$eventSubscriberDatastore = this.$eventDatastore.duplicateConnection();
 
     this.$handlerDatastoreByName = {};
     this.$$handlerCallbackListByChannelName = {};
@@ -46,6 +62,33 @@ class NucleusEngine {
     this.eventTTL = 1000 * 60 * 5; // 5 minutes
 
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ]);
+
+    // Make sure that the Action datastore is configured correctly.
+    this.$actionDatastore
+      .then(() => this.$actionDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'notify-keyspace-events');`))
+      .then(([ configurationName, keyspaceNotificationActivated ]) => {
+        if (keyspaceNotificationActivated !== 'AKE') {
+          (this.$logger || console).error(`Redis' Keyspace Notification is not activated, please make sure to configure your Redis server correctly.
+  # redis.conf
+  # Check http://download.redis.io/redis-stable/redis.conf for more details.
+  notify-keyspace-events AKE
+  `);
+          process.exit(699);
+        }
+      });
+
+    // Make sure that the Engine datastore is configured correctly.
+    this.$engineDatastore
+      .then(() => this.$engineDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'save');`))
+      .then(([ configurationName, saveActivated ]) => {
+        if (nucleusValidator.isEmpty(saveActivated)) {
+          (this.$logger || console).warn(`Redis' Save policy is not activated; because Redis is used a as main store in certain cases, please make sure to configure your Redis server correctly.
+  # redis.conf
+  # Check http://download.redis.io/redis-stable/redis.conf for more details.
+  save 900 1
+  `);
+        }
+      });
 
     const $$proxy = new Proxy(this, {
       get: function (object, property) {
@@ -63,6 +106,27 @@ class NucleusEngine {
     this.$eventSubscriberDatastore.$$server.on('pmessage', handleRedisEvent.bind({ $engine: this }));
 
     return $$proxy;
+  }
+
+  /**
+   * Destroys the engine and the related datastores.
+   *
+   * @returns {Promise}
+   */
+  async destroy () {
+    const $datastoreList = [this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore];
+
+    Object.keys(this.$handlerDatastoreByName)
+      .forEach((datastoreName) => {
+
+        $datastoreList.push(this.$handlerDatastoreByName[datastoreName]);
+      });
+
+    return Promise.all($datastoreList
+      .map(($datastore) => {
+
+        return $datastore.destroy();
+      }));
   }
 
   /**
@@ -90,19 +154,84 @@ class NucleusEngine {
    *
    * @returns {Promise<NucleusAction>}
    */
-  executePendingAction ($action) {
-    const { ID: actionID, name: actionName } = $action;
+  async executeAction ($action) {
+    const { ID: actionID, name: actionName, originalMessage: actionMessage, } = $action;
+    const actionItemKey = $action.generateOwnItemKey();
 
-    // NOTE: Implement the execution of an action
-    return this.publishEventToChannelByName(`Action:${actionID}`, {
-      name: 'ActionStatusUpdated',
-      message: {
-        actionFinalMessage: {},
+    try {
+      // 1. Retrieve the action configuration.
+      const actionConfiguration = await this.$datastore.retrieveItemFromFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName);
+
+      if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
+
+      $action.updateStatus(NucleusAction.ProcessingActionStatus);
+      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status);
+
+      const { fileName = '', fileType = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
+
+      // 2. Validate the action message.
+      const actionMessageArgumentList = Object.keys(actionMessage);
+
+      // Make sure that the message meets one of the proposed signature criteria.
+      const fulfilledActionSignature = [ actionSignature ]
+        .filter((argumentNameList) => {
+
+          return argumentNameList
+            .reduce((accumulator, argumentName) => {
+              if (argumentName === 'options') accumulator.push(argumentName);
+              else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
+
+              return accumulator;
+            }, []).length === argumentNameList.length;
+        })[0];
+
+      if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing");
+
+      if (!nucleusValidator.isEmpty(argumentConfigurationByArgumentName)) {
+        const Signature = nucleusValidator.struct(argumentConfigurationByArgumentName);
+
+        Signature(actionMessage);
+      }
+
+      const argumentList = fulfilledActionSignature
+        .reduce((accumulator, argumentName) => {
+          if (argumentName === 'options') accumulator.push(actionMessage);
+          else accumulator.push(actionMessage[argumentName]);
+
+          return accumulator;
+        }, []);
+
+      // 3. Retrieve the execution context and method.
+      const $executionContext = this;
+
+      // 4. Execute action.
+      const actionResponse = await $executionContext[methodName].apply($executionContext, argumentList);
+
+      $action.updateStatus(NucleusAction.CompletedActionStatus);
+      $action.updateMessage(actionResponse);
+      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+
+      // 5. Send event to action channel.
+
+      const $event = new NucleusEvent('ActionStatusUpdated', {
+        actionFinalMessage: actionResponse,
         actionID,
         actionName,
         actionStatus: 'Completed'
-      }
-    });
+      });
+
+      await this.publishEventToChannelByName(`Action:${actionID}`, $event);
+
+      return Promise.resolve($action);
+    } catch (error) {
+      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, error);
+
+      $action.updateStatus(NucleusAction.FailedActionStatus);
+      $action.updateMessage({ error });
+      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+
+      return Promise.reject(error);
+    }
   }
 
   /**
@@ -135,14 +264,16 @@ class NucleusEngine {
    * @returns {Promise<Object>}
    */
   async publishActionToQueueByName (actionQueueName, $action) {
-    if (typeof actionQueueName !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string."));
-    if (!($action instanceof NucleusAction)) return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The action is not a valid Nucleus action."));
+    if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string.");
+    if (!($action instanceof NucleusAction)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action is not a valid Nucleus action.");
 
-    const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ActionQueueNameSet, actionQueueName);
+    const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ACTION_QUEUE_NAME_SET_ITEM_NAME, actionQueueName);
 
-    if (!actionQueueNameRegistered) return Promise.reject(new NucleusError.UndefinedContextNucleusError(`The action queue name ${actionQueueName} doesn't exist or has not been properly registered.`));
+    if (!actionQueueNameRegistered) throw new NucleusError.UndefinedContextNucleusError(`The action queue name ${actionQueueName} doesn't exist or has not been properly registered.`);
 
     const actionKeyName = $action.generateOwnItemKey();
+
+    $action.updateStatus(NucleusAction.PendingActionStatus);
 
     return this.$actionDatastore.$$server.multi()
       // Store the action as a hash item.
@@ -153,10 +284,6 @@ class NucleusEngine {
       // prevent unnecessary memory bulk-up.
       .pexpire(actionKeyName, this.actionTTL)
       .execAsync()
-      .tap(() => {
-
-        return this.handleActionEventByActionID($action.ID);
-      })
       .return({ actionQueueName, $action });
   }
 
@@ -172,11 +299,11 @@ class NucleusEngine {
    * @returns {Promise<Object>}
    */
   async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, originUserID) {
-    if (typeof actionName !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The action name must be a string."));
-    if (Object.prototype.toString.call(actionMessage) !== '[object Object]') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object."));
-    if (!originUserID) return Promise.reject(new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined."));
+    if (!nucleusValidator.isString(actionName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action name must be a string.");
+    if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
+    if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
 
-    const actionQueueName = await this.$actionDatastore.retrieveItemFromFieldByName(ActionQueueNameByActionName, actionName);
+    const actionQueueName = await this.$actionDatastore.retrieveItemFromFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName);
 
     const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
@@ -231,8 +358,8 @@ class NucleusEngine {
    * @returns {Promise<Object>}
    */
   publishEventToChannelByName (channelName, $event) {
-    if (typeof channelName !== 'string') return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The event channel name must be a string."));
-    if (!($event instanceof NucleusEvent)) return Promise.reject(new NucleusError.UnexpectedValueTypeNucleusError("The event is not a valid Nucleus event."));
+    if (!nucleusValidator.isString(channelName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event channel name must be a string.");
+    if (!($event instanceof NucleusEvent)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event is not a valid Nucleus event.");
 
     const timestamp = Date.now();
 

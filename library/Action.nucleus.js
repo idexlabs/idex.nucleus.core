@@ -7,10 +7,14 @@
  *
  * @requires NPM:node-uuid
  * @requires ./Error.nucleus
+ * @requires ./Resource.nucleus
+ * @requires ./validator.nucleus
  */
 
 const NucleusError = require('./Error.nucleus');
 const NucleusResource = require('./Resource.nucleus');
+
+const nucleusValidator = require('./validator.nucleus');
 
 const CompletedActionStatus = 'Completed';
 const FailedActionStatus = 'Failed';
@@ -68,7 +72,7 @@ class NucleusAction extends NucleusResource{
   constructor (actionName, actionMessage = {}, options = {}) {
     if (arguments.length === 1 && arguments[0] instanceof NucleusAction) return arguments[0];
     else {
-      if (!actionName || actionName === '') throw new NucleusError.UndefinedValueNucleusError("The action name is mandatory.");
+      if (!nucleusValidator.isString(actionName) || nucleusValidator.isEmpty(actionName)) throw new NucleusError.UndefinedValueNucleusError("The action name is mandatory.");
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 
@@ -111,7 +115,7 @@ class NucleusAction extends NucleusResource{
    * @throws Will throw an error if the action message is not an object.
    */
   updateMessage (actionMessage = {}) {
-    if (Object.prototype.toString.call(actionMessage) !== '[object Object]') throw new NucleusError.UnexpectedValueTypeNucleusError("The action message is not an object as expected.");
+    if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message is not an object as expected.");
 
     this.meta.modifiedISOTime = new Date().toISOString();
 

@@ -7,10 +7,11 @@ const uuid = require('node-uuid');
 const redis = require('redis');
 
 const NucleusDatastore = require('../library/Datastore.nucleus');
+const NucleusError = require('../library/Error.nucleus');
 
-const datastoreIndex = 0;
-const datastoreURL = 'localhost';
-const datastorePort = 6379;
+const DATASTORE_INDEX = 0;
+const DATASTORE_URL = 'localhost';
+const DATASTORE_PORT = 6379;
 
 mocha.suite("Nucleus Datastore", function () {
 
@@ -22,9 +23,9 @@ mocha.suite("Nucleus Datastore", function () {
 
   mocha.suiteSetup(function (done) {
     const $$redisTestClient = redis.createClient({
-      db: datastoreIndex,
-      host: datastoreURL,
-      port: datastorePort
+      db: DATASTORE_INDEX,
+      host: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
     if ($$redisTestClient.connected) done();
@@ -41,9 +42,9 @@ mocha.suite("Nucleus Datastore", function () {
 
   mocha.suiteSetup(function () {
     const $datastore = new NucleusDatastore('Test', {
-      index: datastoreIndex,
-      URL: datastoreURL,
-      port: datastorePort
+      index: DATASTORE_INDEX,
+      URL: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
     Object.defineProperty(this, '$datastore', {
@@ -52,6 +53,15 @@ mocha.suite("Nucleus Datastore", function () {
     });
 
     return $datastore;
+  });
+
+  mocha.suiteTeardown(async function () {
+    const { $datastore, $$redisTestClient } = this;
+
+    await $datastore.destroy();
+    await $$redisTestClient.quitAsync();
+
+    return Promise.resolve();
   });
 
   mocha.suite("#addItemToHashByName", function () {
@@ -164,28 +174,24 @@ mocha.suite("Nucleus Datastore", function () {
         });
     });
 
-    mocha.test("Using an undefined item name throws an error.", function (done) {
+    mocha.test("Using an undefined item name throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      $datastore.addItemToHashByName(undefined, itemHashKey, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.addItemToHashByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
     });
 
-    mocha.test("Using an undefined hash key throws an error.", function (done) {
+    mocha.test("Using an undefined hash key throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemName = `Item`;
       const item = itemID;
 
-      $datastore.addItemToHashByName(itemName, undefined, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.addItemToHashByName(itemName, undefined, item); }).to.throw(NucleusError);
     });
 
   });
@@ -261,15 +267,13 @@ mocha.suite("Nucleus Datastore", function () {
         });
     });
 
-    mocha.test("Using an undefined item name throws an error.", function (done) {
+    mocha.test("Using an undefined item name throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const item = itemID;
 
-      $datastore.createItem(undefined, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.createItem(undefined, item) }).to.throw(NucleusError);
     });
 
   });
@@ -344,12 +348,10 @@ return { itemIDA, itemIDB, itemIDC }
         });
     });
 
-    mocha.test("Using an undefined item name throws an error.", function (done) {
+    mocha.test("Using an undefined item name throws an error.", function () {
       const { $datastore } = this;
 
-      $datastore.removeItemByName(undefined)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.removeItemByName(undefined); }).to.throw(NucleusError);
     });
 
   });
@@ -378,28 +380,24 @@ return { itemIDA, itemIDB, itemIDC }
         });
     });
 
-    mocha.test("Using an undefined item name throws an error.", function (done) {
+    mocha.test("Using an undefined item name throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      $datastore.removeItemFromFieldByName(undefined, itemHashKey, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.removeItemFromFieldByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
     });
 
-    mocha.test("Using an undefined hash key throws an error.", function (done) {
+    mocha.test("Using an undefined hash key throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemName = `Item`;
       const item = itemID;
 
-      $datastore.removeItemFromFieldByName(itemName, undefined, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.removeItemFromFieldByName(itemName, undefined, item); }).to.throw(NucleusError);
     });
 
   });
@@ -474,12 +472,10 @@ return { itemIDA, itemIDB, itemIDC }
         });
     });
 
-    mocha.test("Using an undefined hash key throws an error.", function (done) {
+    mocha.test("Using an undefined hash key throws an error.", function () {
       const { $datastore } = this;
 
-      $datastore.retrieveItemByName(undefined)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.retrieveItemByName(undefined); }).to.throw(NucleusError);
     });
 
   });
@@ -558,28 +554,24 @@ return { itemIDA, itemIDB, itemIDC }
         });
     });
 
-    mocha.test("Using an undefined name throws an error.", function (done) {
+    mocha.test("Using an undefined name throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      $datastore.retrieveItemFromFieldByName(undefined, itemHashKey, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.retrieveItemFromFieldByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
     });
 
-    mocha.test("Using an undefined hash key throws an error.", function (done) {
+    mocha.test("Using an undefined hash key throws an error.", function () {
       const { $datastore } = this;
 
       const itemID = uuid.v1();
       const itemName = `Item`;
       const item = itemID;
 
-      $datastore.retrieveItemFromFieldByName(itemName, undefined, item)
-        .then(done.bind(null, new Error('The method was expected to throw an error.')))
-        .catch(done.bind(null, undefined));
+      chai.expect(() => { $datastore.retrieveItemFromFieldByName(itemName, undefined, item); }).to.throw(NucleusError);
     });
 
   });

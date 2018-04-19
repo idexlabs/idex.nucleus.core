@@ -1,20 +1,29 @@
 {
   "name": "Nucleus",
   "version": "0.1.0",
+  "description": "A framework to quickly develop microservice architecture in NodeJS.",
+  "author": "Sebastien Filion <sebastienfilion@mac.com>",
+  "license": "MIT",
+  "main": "index.js",
+  "engines": {
+    "node": ">=8.9"
+  },
   "dependencies": {
     "bluebird": "^3.5.1",
+    "colors": "^1.2.1",
     "express": "^4.16.3",
-    "hexastore": "^0.1.5",
     "node-uuid": "^1.4.8",
     "redis": "^2.8.0",
-    "socket.io": "^2.0.4",
-    "socket.io-client": "^2.0.4",
-    "socketio": "^1.0.0"
+    "superstruct": "^0.5.2",
+    "validator": "^9.4.1",
+    "winston": "^2.4.1",
+    "winston-transport": "^3.1.0"
   },
   "devDependencies": {
     "chai": "latest",
     "eslint": "latest",
     "mocha": "latest",
-    "sinon": "latest"
+    "sinon": "latest",
+    "socket.io-client": "latest"
   }
 }

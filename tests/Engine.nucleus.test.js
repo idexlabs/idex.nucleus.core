@@ -10,40 +10,45 @@ const redis = require('redis');
 const NucleusAction = require('../library/Action.nucleus');
 const NucleusDatastore = require('../library/Datastore.nucleus');
 const NucleusEngine = require('../library/Engine.nucleus');
+const NucleusError = require('../library/Error.nucleus');
 const NucleusEvent = require('../library/Event.nucleus');
 
-const datastoreIndex = 0;
-const datastoreURL = 'localhost';
-const datastorePort = 6379;
+const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
+const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
+const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
+
+const DATASTORE_INDEX = 0;
+const DATASTORE_URL = 'localhost';
+const DATASTORE_PORT = 6379;
 
 mocha.suite('Nucleus Engine', function () {
 
   mocha.suiteSetup(function () {
     const $actionDatastore = new NucleusDatastore('Action', {
-      index: datastoreIndex,
-      URL: datastoreURL,
-      port: datastorePort
+      index: DATASTORE_INDEX,
+      URL: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
     const $engineDatastore = new NucleusDatastore('Engine', {
-      index: datastoreIndex,
-      URL: datastoreURL,
-      port: datastorePort
+      index: DATASTORE_INDEX,
+      URL: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
     const $eventDatastore = new NucleusDatastore('Event', {
-      index: datastoreIndex,
-      URL: datastoreURL,
-      port: datastorePort
+      index: DATASTORE_INDEX,
+      URL: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
     const $datastore = new NucleusDatastore('Test', {
-      index: datastoreIndex,
-      URL: datastoreURL,
-      port: datastorePort
+      index: DATASTORE_INDEX,
+      URL: DATASTORE_URL,
+      port: DATASTORE_PORT
     });
 
-    const $engine = new NucleusEngine('Dummy', {
+    const $engine = new NucleusEngine('Test', {
       $actionDatastore,
       $engineDatastore,
       $eventDatastore
@@ -70,10 +75,12 @@ mocha.suite('Nucleus Engine', function () {
     return $datastore.$$server.flushallAsync();
   });
 
-  mocha.suiteSetup(function () {
+  mocha.suiteSetup(async function () {
     const { $datastore } = this;
 
-    return $datastore.addItemToSet('ActionQueueNameSet', 'Dummy');
+    await $datastore.addItemToSet(ACTION_QUEUE_NAME_SET_ITEM_NAME, 'Dummy');
+    await $datastore.addItemToHashByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, 'ExecuteSimpleDummy', 'Dummy');
+
   });
 
   mocha.suiteTeardown(function () {
@@ -83,6 +90,117 @@ mocha.suite('Nucleus Engine', function () {
   });
 
   mocha.suite("Actions", function () {
+
+    mocha.suiteSetup(function () {
+      class DummyEngine extends NucleusEngine {
+
+        executeSimpleDummy () {
+
+          return Promise.resolve({ AID: uuid.v1() });
+        }
+
+        executeSimpleDummyWithArguments (AID1, AID2) {
+
+          return Promise.resolve({ AID1, AID2 });
+        }
+
+      }
+
+      const $dummyEngine = new DummyEngine();
+
+      Reflect.defineProperty(this, '$dummyEngine', {
+        value: $dummyEngine,
+        writable: false
+      });
+
+      return $dummyEngine;
+    });
+
+    mocha.suiteSetup(async function () {
+      const { $datastore } = this;
+
+      await $datastore.addItemToHashByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummy', {
+        methodName: 'executeSimpleDummy'
+      });
+
+      await $datastore.addItemToHashByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummyWithArguments', {
+        actionSignature: [ 'AID1', 'AID2' ],
+        argumentConfigurationByArgumentName: {
+          AID1: 'string',
+          AID2: 'string'
+        },
+        methodName: 'executeSimpleDummyWithArguments'
+      });
+    });
+
+    mocha.suiteTeardown(async function () {
+      const { $dummyEngine } = this;
+
+      await $dummyEngine.destroy();
+
+      Reflect.deleteProperty(this, '$dummyEngine');
+
+      return Promise.resolve();
+    });
+
+    mocha.suite("#executeAction", function () {
+
+      mocha.test("The executed action is returned containing the final message.", async function () {
+        const { $dummyEngine } = this;
+
+        const $action = new NucleusAction('ExecuteSimpleDummy', {});
+
+        const { finalMessage: { AID } } = await $dummyEngine.executeAction($action);
+
+        chai.expect(AID).to.be.a('string');
+      });
+
+      mocha.test("The action message is returned as the final message.", async function () {
+        const { $dummyEngine } = this;
+        const AID1 = uuid.v1();
+        const AID2 = uuid.v1();
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithArguments', { AID1, AID2 });
+
+        const { finalMessage } = await $dummyEngine.executeAction($action);
+
+        chai.expect(finalMessage).to.deep.equal({ AID1, AID2 });
+      });
+
+      mocha.test("Using an action name that was not configured throws an error.", function (done) {
+        const { $dummyEngine } = this;
+
+        const $action = new NucleusAction('UnknownAction', {});
+
+        $dummyEngine.executeAction($action)
+          .then(done.bind(undefined, new Error("Was expecting this to fail")))
+          .catch(done.bind(undefined, null));
+      });
+
+      mocha.test("Passing a message that does not validate because its empty throws an error.", function (done) {
+        const { $dummyEngine } = this;
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithArguments', {});
+
+        $dummyEngine.executeAction($action)
+          .then(done.bind(undefined, new Error("Was expecting this to fail")))
+          .catch(done.bind(undefined, null));
+      });
+
+      mocha.test("Passing a message that does not validate because its properties have the wrong type throws an error.", function (done) {
+        const { $dummyEngine } = this;
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithArguments', {
+          AID1: 1,
+          AID2: 2
+        });
+
+        $dummyEngine.executeAction($action)
+          .then(done.bind(undefined, new Error("Was expecting this to fail")))
+          .catch(done.bind(undefined, null));
+      });
+
+    });
 
     mocha.suite("#publishActionToQueueByName", function () {
 
@@ -105,6 +223,52 @@ mocha.suite('Nucleus Engine', function () {
               chai.expect(!!keyNameExist, "The item for the `DummyAction` has been created.").to.be.true;
             })
         ]);
+      });
+
+    });
+
+    mocha.suite("#publishActionByNameAndHandleResponse", function () {
+
+      mocha.suiteSetup(async function () {
+        const { $datastore } = this;
+        const $handlerDatastore = this.$datastore.duplicateConnection();
+
+        // Manually publish an event informing of that the action's status was updated.
+        // This will trigger the #publishActionByNameAndHandleResponse to resolve with the response;
+
+        await $handlerDatastore.$$server.subscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
+
+        $handlerDatastore.$$server.on('message', async (channelName, redisCommand) => {
+          if (channelName !== `__keyspace@${DATASTORE_INDEX}__:Dummy` || redisCommand !== 'lpush') return;
+
+          const actionItemKey = await $datastore.$$server.lpopAsync('Dummy');
+          const [ itemType, actionName, actionID ] = actionItemKey.split(':');
+
+          $datastore.$$server.publish(`Action:${actionID}`, JSON.stringify({
+            name: 'ActionStatusUpdated',
+            message: {
+              actionFinalMessage: {
+                dummy: { ID: uuid.v4() }
+              },
+              actionID,
+              actionName,
+              actionStatus: 'Completed'
+            }
+          }));
+
+          await $handlerDatastore.$$server.unsubscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
+        });
+
+        return Promise.resolve();
+      });
+
+      mocha.test("The response is returned once the action has been fulfilled.", async function () {
+        const { $engine } = this;
+        const userID = uuid.v4();
+
+        const { dummy } = await $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', { iam: 'special' }, userID);
+
+        chai.expect(dummy).to.be.an('object');
       });
 
     });
@@ -150,7 +314,7 @@ mocha.suite('Nucleus Engine', function () {
         const { $engine } = this;
         const [ spyA, spyB, spyC ] = $engine.$$handlerCallbackListByChannelName.DummyEvent;
 
-        const $event = new NucleusEvent('DummyDummied', {});
+        const $event = new NucleusEvent('ExecuteSimpleDummy', {});
 
         await $engine.executeHandlerCallbackForChannelName('DummyEvent', $event);
 
@@ -194,7 +358,7 @@ mocha.suite('Nucleus Engine', function () {
         const { $engine } = this;
         const spy = $engine.$$handlerCallbackListByChannelName.DummyEvent[0];
 
-        const $event = new NucleusEvent('DummyDummied', {});
+        const $event = new NucleusEvent('ExecuteSimpleDummy', {});
 
         await $engine.subscribeToChannelName('DummyEvent');
         await $engine.publishEventToChannelByName('DummyEvent', $event);

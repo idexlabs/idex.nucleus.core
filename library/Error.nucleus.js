@@ -6,7 +6,7 @@
  * @author Sebastien Filion
  */
 
-const StackOriginMetaRegularExpression = new RegExp('^([A-Za-z]+):.*\\s*at\\s(.*)\\s\\((.*):([0-9]+):([0-9]+)\\)', 'm');
+const $$stackOriginMetaRegularExpression = new RegExp('^([A-Za-z]+):.*\\s*at\\s(.*)\\s\\((.*):([0-9]+):([0-9]+)\\)', 'm');
 
 /**
  * @module NucleusError
@@ -27,15 +27,23 @@ class NucleusError extends Error {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
+  constructor (errorMessage, error) {
     super(errorMessage);
 
-    const [ nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber ] = this.stack.match(StackOriginMetaRegularExpression).splice(1);
+    if (!!error && error instanceof Error) this.stack = error.stack;
+
+    const [ nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber ] = (error || this).stack.match($$stackOriginMetaRegularExpression).splice(1);
 
     this.name = 'NucleusError';
     this.errorCode = 600;
 
     Object.assign(this, { nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber });
+
+    Reflect.defineProperty(this, 'message', {
+      value: this.message,
+      writable: false,
+      enumerable: true
+    });
   }
 
   [Symbol.toPrimitive] (primitiveType) {
