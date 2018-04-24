@@ -28,6 +28,11 @@ const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
 const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
 const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
 
+const NODE_ENVIRONMENT = process.env.NODE_ENV || 'development';
+const DEVELOPMENT_ENVIRONMENT_NAME = 'development';
+const TESTING_ENVIRONMENT_NAME = 'testing';
+const PRODUCTION_ENVIRONMENT_NAME = 'production';
+
 class NucleusEngine {
 
   /**
@@ -39,16 +44,28 @@ class NucleusEngine {
    * @argument {NucleusDatastore} [options.$actionDatastore]
    * @argument {NucleusDatastore} [options.$engineDatastore]
    * @argument {NucleusDatastore} [options.$eventDatastore]
+   * @argument {NucleusDatastore} [options.$logger]
+   * @argument {Boolean} [options.automaticallyRetrievePendingActions=false]
+   * @argument {String} [options.defaultActionQueueName=<Engine's name>]
    *
    * @returns {Proxy}
    */
   constructor (engineName, options = {}) {
-    const { $actionDatastore = new NucleusDatastore(), $engineDatastore = new NucleusDatastore(), $eventDatastore = new NucleusDatastore() } = options;
+    const {
+      $actionDatastore = new NucleusDatastore(),
+      $engineDatastore = new NucleusDatastore(),
+      $eventDatastore = new NucleusDatastore(),
+      $logger = console,
+      automaticallyRetrievePendingActions = false,
+      defaultActionQueueName = engineName
+    } = options;
 
     /** @member {String} ID */
     Reflect.defineProperty(this, 'ID', { value: uuid.v1(), writable: false });
     /** @member {String} name */
     Reflect.defineProperty(this, 'name', { value: engineName, writable: false });
+
+    this.defaultActionQueueName = defaultActionQueueName;
 
     this.$actionDatastore = $actionDatastore;
     this.$engineDatastore = this.$datastore = $engineDatastore;
@@ -58,36 +75,19 @@ class NucleusEngine {
     this.$handlerDatastoreByName = {};
     this.$$handlerCallbackListByChannelName = {};
 
+    this.$logger = $logger;
+
     this.actionTTL = 1000 * 60 * 60; // One hour
     this.eventTTL = 1000 * 60 * 5; // 5 minutes
 
-    this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ]);
+    this.$logger.info(`Initializing the ${this.name} engine...`);
 
-    // Make sure that the Action datastore is configured correctly.
-    this.$actionDatastore
-      .then(() => this.$actionDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'notify-keyspace-events');`))
-      .then(([ configurationName, keyspaceNotificationActivated ]) => {
-        if (keyspaceNotificationActivated !== 'AKE') {
-          (this.$logger || console).error(`Redis' Keyspace Notification is not activated, please make sure to configure your Redis server correctly.
-  # redis.conf
-  # Check http://download.redis.io/redis-stable/redis.conf for more details.
-  notify-keyspace-events AKE
-  `);
-          process.exit(699);
-        }
-      });
-
-    // Make sure that the Engine datastore is configured correctly.
-    this.$engineDatastore
-      .then(() => this.$engineDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'save');`))
-      .then(([ configurationName, saveActivated ]) => {
-        if (nucleusValidator.isEmpty(saveActivated)) {
-          (this.$logger || console).warn(`Redis' Save policy is not activated; because Redis is used a as main store in certain cases, please make sure to configure your Redis server correctly.
-  # redis.conf
-  # Check http://download.redis.io/redis-stable/redis.conf for more details.
-  save 900 1
-  `);
-        }
+    // Execute everything needed during the initialization phase of the engine.
+    this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
+      .then(this.verifyRedisConfiguration.bind(this))
+      .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
+      .then(() => {
+        this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
 
     const $$proxy = new Proxy(this, {
@@ -122,11 +122,16 @@ class NucleusEngine {
         $datastoreList.push(this.$handlerDatastoreByName[datastoreName]);
       });
 
+    this.$logger.info(`Destroying the ${this.name} engine and ${$datastoreList.length} datastore connection${($datastoreList.length > 1) ? 's' : ''}...`);
+
     return Promise.all($datastoreList
       .map(($datastore) => {
 
         return $datastore.destroy();
-      }));
+      }))
+      .then(() => {
+        this.$logger.info(`The ${this.name} engine has been destroyed.`);
+      });
   }
 
   /**
@@ -138,7 +143,11 @@ class NucleusEngine {
    * @returns {Promise}
    */
   executeHandlerCallbackForChannelName (channelName, $event) {
-    const $$handlerCallbackList = this.$$handlerCallbackListByChannelName[channelName] || [];
+    const $$handlerCallbackList = this.$$handlerCallbackListByChannelName[channelName];
+
+    if (nucleusValidator.isEmpty($$handlerCallbackList)) return;
+
+    this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, eventID: $event.ID, eventName: $event.name });
 
     return Promise.all($$handlerCallbackList
       .map(($$handlerCallback) => {
@@ -160,12 +169,14 @@ class NucleusEngine {
 
     try {
       // 1. Retrieve the action configuration.
-      const actionConfiguration = await this.$datastore.retrieveItemFromFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName);
+      const actionConfiguration = await this.$datastore.retrieveItemFromHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName);
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
+      this.$logger.debug(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
+
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
-      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status);
 
       const { fileName = '', fileType = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
 
@@ -209,7 +220,7 @@ class NucleusEngine {
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);
-      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       // 5. Send event to action channel.
 
@@ -222,13 +233,15 @@ class NucleusEngine {
 
       await this.publishEventToChannelByName(`Action:${actionID}`, $event);
 
+      this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName });
+
       return Promise.resolve($action);
     } catch (error) {
       if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, error);
 
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
-      await this.$datastore.addItemToHashByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       return Promise.reject(error);
     }
@@ -266,10 +279,13 @@ class NucleusEngine {
   async publishActionToQueueByName (actionQueueName, $action) {
     if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string.");
     if (!($action instanceof NucleusAction)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action is not a valid Nucleus action.");
+    const { ID: actionID, name: actionName } = $action;
 
     const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ACTION_QUEUE_NAME_SET_ITEM_NAME, actionQueueName);
 
     if (!actionQueueNameRegistered) throw new NucleusError.UndefinedContextNucleusError(`The action queue name ${actionQueueName} doesn't exist or has not been properly registered.`);
+
+    this.$logger.debug(`Publishing action "${actionName} (${actionID})" to action queue "${actionQueueName}"...`, { actionID, actionName, actionQueueName });
 
     const actionKeyName = $action.generateOwnItemKey();
 
@@ -277,13 +293,16 @@ class NucleusEngine {
 
     return this.$actionDatastore.$$server.multi()
       // Store the action as a hash item.
-      .hmset(actionKeyName, 'ID', $action.ID, 'meta', $action.meta.toString(), 'name', $action.name, 'status', $action.status, 'originalMessage', $action.originalMessage.toString(), 'originUserID', $action.originUserID)
+      .hmset(actionKeyName, 'ID', actionID, 'meta', $action.meta.toString(), 'name', actionName, 'status', $action.status, 'originalMessage', $action.originalMessage.toString(), 'originUserID', $action.originUserID)
       // Add the action key name into the appropriate action queue.
       .lpush(actionQueueName, `${$action}`)
       // Expire the action in a set TTL, the action should be kept a little while for debugging but not for too long to
       // prevent unnecessary memory bulk-up.
       .pexpire(actionKeyName, this.actionTTL)
       .execAsync()
+      .tap(() => {
+        this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully published.`, { actionID, actionName, actionQueueName });
+      })
       .return({ actionQueueName, $action });
   }
 
@@ -303,44 +322,51 @@ class NucleusEngine {
     if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
 
-    const actionQueueName = await this.$actionDatastore.retrieveItemFromFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName);
+    const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName);
 
     const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
-    await this.publishActionToQueueByName(actionQueueName, $action);
+    return new Promise(async (resolve, reject) => {
+      const actionItemKey = $action.generateOwnItemKey();
 
-    return new Promise((resolve, reject) => {
-      const { ID: actionID } = $action;
+      const actionDatastoreIndex = this.$actionDatastore.index;
+      const $actionSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty('ActionSubscriber')) ?
+        this.$handlerDatastoreByName['ActionSubscriber'] :
+        (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection());
 
-      this.subscribeToChannelName(`Action:${actionID}`);
+      await $actionSubscriberDatastore;
 
-      this.handleEventByChannelName(`Action:${actionID}`, async ($event) => {
-        const { name: eventName, message: eventMessage } = $event;
+      await $actionSubscriberDatastore.$$server.subscribeAsync(`__keyspace@${actionDatastoreIndex}__:${actionItemKey}`);
 
-        switch (eventName) {
-          case 'ActionStatusUpdated':
-            const { actionFinalMessage, actionID, actionName, actionStatus } = eventMessage;
-            const actionKeyName = NucleusAction.generateItemKey('NucleusAction', actionID,  actionName);
+      $actionSubscriberDatastore.$$server.on('message', async (channelPattern, redisCommand) => {
+        if (redisCommand !== 'hset' && redisCommand !== 'hmset') return;
 
-            switch (actionStatus) {
-              case 'Completed':
-              case 'Failed':
-                await this.$actionDatastore.addItemToHashByName(actionKeyName, 'finalMessage', actionFinalMessage, 'status', actionStatus);
+        const [ keyspace, itemType, actionName, actionID ] = channelPattern.split(':');
+        const actionItemKey = `${itemType}:${actionName}:${actionID}`;
 
-                ((actionStatus === 'Completed') ? resolve : reject)(actionFinalMessage);
+        try {
+          const [ actionFinalMessage, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName(actionItemKey, 'finalMessage', 'status');
 
-                this.unsubscribeFromChannelName(`Action:${actionID}`);
-                break;
+          if (actionStatus === NucleusAction.CompletedActionStatus || actionStatus === NucleusAction.FailedActionStatus) {
+            this.$logger.debug(`The action "${actionName} (${actionID})" status has been updated to "${actionStatus}".`);
+            // Resolve or reject the promise with the final message base on the action's status.
+            ((actionStatus === NucleusAction.CompletedActionStatus) ? resolve : reject)(actionFinalMessage);
 
-              default:
-                await this.$actionDatastore.addItemToHashByName(actionFinalMessage, 'status', actionStatus);
-            }
+            $actionSubscriberDatastore.$$server.unsubscribeAsync(`__keyspace@${actionDatastoreIndex}__:${actionItemKey}`);
+          }
+        } catch (error) {
 
-            break;
-          default:
-            // NOTE: Implement event pipe
+          reject(new NucleusError(`Could not handle the action's response because of an external error: ${error}`, { error }));
         }
+
       });
+
+      try {
+        await this.publishActionToQueueByName(actionQueueName, $action);
+      } catch (error) {
+
+        reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
+      }
     });
   }
 
@@ -360,6 +386,9 @@ class NucleusEngine {
   publishEventToChannelByName (channelName, $event) {
     if (!nucleusValidator.isString(channelName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event channel name must be a string.");
     if (!($event instanceof NucleusEvent)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event is not a valid Nucleus event.");
+    const { ID: eventID, name: eventName } = $event;
+
+    this.$logger.debug(`Publishing event "${eventName} (${eventID})" to channel "${channelName}"...`, { channelName, eventID, eventName });
 
     const timestamp = Date.now();
 
@@ -377,7 +406,70 @@ class NucleusEngine {
       // Publish the event through Redis for other engine.
       .publish(channelName, JSON.stringify($event))
       .execAsync()
+      .tap(() => {
+        this.$logger.debug(`The event "${eventName} (${eventID})" has been successfully published.`, { channelName, eventID, eventName });
+      })
       .return({ channelName, $event });
+  }
+
+  async retrievePendingAction (actionQueueName) {
+    const $handlerDatastore = (this.$handlerDatastoreByName.hasOwnProperty(`${actionQueueName}Handler`)) ?
+      this.$handlerDatastoreByName[`${actionQueueName}Handler`] :
+      (this.$handlerDatastoreByName[`${actionQueueName}Handler`] = this.$actionDatastore.duplicateConnection());
+
+    try {
+      this.$logger.debug(`Retrieving a pending action from action queue "${actionQueueName}"...`, { actionQueueName });
+
+      const actionItemKey = (await $handlerDatastore.$$server.brpopAsync(actionQueueName, 0))[1];
+
+      const $action = new NucleusAction(await (this.$actionDatastore.retrieveAllItemsFromHashByName(actionItemKey)));
+      const { ID: actionID, name: actionName } = $action;
+
+      this.$logger.debug(`Retrieved a pending action "${actionName} (${actionID})" from action queue "${actionQueueName}".`, { actionID, actionName, actionQueueName });
+      // if (NODE_ENVIRONMENT === DEVELOPMENT_ENVIRONMENT_NAME) {
+      //   try {
+      //     const actionQueueItemCount = await $handlerDatastore.$$server.llenAsync(actionQueueName);
+      //     this.$logger.debug(`${actionQueueName} action queue has ${actionQueueItemCount} pending action${(actionQueueItemCount > 1) ? 's' : ''} left.`);
+      //
+      //   } catch (e) {
+      //     console.error(e);
+      //   }
+      // }
+
+      process.nextTick(this.executeAction.bind(this, $action));
+    } catch (error) {
+      this.$logger.warn(`In progress: ${error}`);
+    }
+  }
+
+  /**
+   * Subscribe to the action queue updates given its name.
+   *
+   * @argument {String} actionQueueName
+   *
+   * @returns {Promise<void>}
+   */
+  subscribeToActionQueueUpdate (actionQueueName) {
+    if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string.");
+
+    const actionDatastoreIndex = this.$actionDatastore.index;
+    const $actionQueueSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty(`${actionQueueName}Subscriber`)) ?
+      this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] :
+      (this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] = this.$actionDatastore.duplicateConnection());
+
+    try {
+      $actionQueueSubscriberDatastore.$$server.subscribe(`__keyspace@${actionDatastoreIndex}__:${actionQueueName}`);
+
+      $actionQueueSubscriberDatastore.$$server.on('message', () => {
+
+        process.nextTick(this.retrievePendingAction.bind(this, actionQueueName));
+      });
+
+      return Promise.resolve();
+    } catch (error) {
+
+      return Promise.reject(error);
+    }
   }
 
   /**
@@ -387,10 +479,9 @@ class NucleusEngine {
    *
    * @returns {Promise<void>}
    */
-  async subscribeToChannelName (channelName) {
-    await this.$eventSubscriberDatastore.$$server.subscribe(channelName);
+  subscribeToChannelName (channelName) {
 
-    return Promise.resolve();
+    return this.$eventSubscriberDatastore.$$server.subscribe(channelName);
   }
 
   /**
@@ -404,6 +495,60 @@ class NucleusEngine {
     await this.$eventSubscriberDatastore.$$server.unsubscribe(channelName);
 
     return Promise.resolve();
+  }
+
+  /**
+   * Verifies that the Redises connection are configured correctly.
+   *
+   * @returns {Promise<void>}
+   */
+  async verifyRedisConfiguration () {
+    // Make sure that the Action datastore is configured correctly.
+    // The process will exit if the Keyspace notification configuration is not properly set.
+    const redisConnectionVerified = !!(await this.$actionDatastore.evaluateLUAScript(`
+    local engineID = ARGV[1]
+    local verificationTTL = ARGV[2]
+          
+    local redisConnectionVerified = redis.call('GET', 'RedisConnectionVerified')
+    if (not redisConnectionVerified) then
+      redis.call('SETEX', 'RedisConnectionVerified', verificationTTL, engineID)
+     
+       return 0
+    end
+ 
+   return 1
+    `, this.ID, 60 * 60 * 7));
+
+    if (redisConnectionVerified) return;
+
+    this.$logger.debug(`Verifying the ${this.name} engine's action datastore connection.`);
+
+    const keyspaceNotificationActivated = (await this.$actionDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'notify-keyspace-events');`))[1];
+
+    if (keyspaceNotificationActivated !== 'AKE') {
+      this.$logger.error(`Redis' Keyspace Notification is not activated, please make sure to configure your Redis server correctly.
+  # redis.conf
+  # Check http://download.redis.io/redis-stable/redis.conf for more details.
+  notify-keyspace-events AKE
+  `);
+      process.exit(699);
+    }
+
+    this.$logger.debug(`The ${this.name} engine's action datastore connection has been verified, all is good.`);
+
+    // Make sure that the Engine datastore is configured correctly;
+    // To avoid any surprise, there should be a save policy.
+    const savePolicyActivated = (await this.$engineDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'save');`))[1];
+
+    if (nucleusValidator.isEmpty(savePolicyActivated)) {
+      this.$logger.warn(`Redis' Save policy is not activated; because Redis is used a as main store in certain cases, please make sure to configure your Redis server correctly.
+  # redis.conf
+  # Check http://download.redis.io/redis-stable/redis.conf for more details.
+  save 900 1
+  save 300 10
+  save 60 10000
+  `);
+    }
   }
 
 }
@@ -431,7 +576,7 @@ function handleRedisEvent (...argumentList) {
 
       // NOTE: Should log any error thrown by the handler.
       $engine.executeHandlerCallbackForChannelName(channelName, $event)
-        .catch(console.error);
+        .catch($engine.$logger.error);
     }
   }
 }

@@ -74,7 +74,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
           return Promise.promisify($$redisTestClient.hget, { context: $$redisTestClient })(itemName, itemHashKey);
@@ -93,7 +93,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemHashKey = `Hash:${itemID}`;
       const item = { ID: itemID };
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
           return Promise.promisify($$redisTestClient.hget, { context: $$redisTestClient })(itemName, itemHashKey);
@@ -111,7 +111,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemHashKey = `Hash:${itemID}`;
       const item = [ itemID ];
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
           return Promise.promisify($$redisTestClient.hget, { context: $$redisTestClient })(itemName, itemHashKey);
@@ -129,7 +129,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemHashKey = `Hash:${itemID}`;
       const item = 1;
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
           return Promise.promisify($$redisTestClient.hget, { context: $$redisTestClient })(itemName, itemHashKey);
@@ -157,7 +157,7 @@ mocha.suite("Nucleus Datastore", function () {
           return accumulator;
         }, [itemName]);
 
-      return $datastore.addItemToHashByName.apply($datastore, hashList)
+      return $datastore.addItemToHashFieldByName.apply($datastore, hashList)
         .then(() => {
           const HMGETArgumentList = itemIDList
             .reduce((accumulator, itemID) => {
@@ -181,7 +181,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      chai.expect(() => { $datastore.addItemToHashByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.addItemToHashFieldByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
     });
 
     mocha.test("Using an undefined hash key throws an error.", function () {
@@ -191,7 +191,94 @@ mocha.suite("Nucleus Datastore", function () {
       const itemName = `Item`;
       const item = itemID;
 
-      chai.expect(() => { $datastore.addItemToHashByName(itemName, undefined, item); }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.addItemToHashFieldByName(itemName, undefined, item); }).to.throw(NucleusError);
+    });
+
+  });
+
+  mocha.suite("#addItemToListByName", function () {
+
+    mocha.test("Items of type string is correctly added to the list.", function () {
+      const { $datastore, $$redisTestClient } = this;
+
+      const itemID = uuid.v1();
+      const itemName = `ItemList`;
+      const item = itemID;
+
+      return $datastore.addItemToListByName(itemName, item)
+        .then(() => {
+
+          return Promise.promisify($$redisTestClient.lpop, { context: $$redisTestClient })(itemName);
+        })
+        .then(NucleusDatastore.parseItem)
+        .then((result) => {
+          chai.expect(result).to.equal(item);
+        });
+    });
+
+    mocha.test("Items of type object is correctly added to the list.", function () {
+      const { $datastore, $$redisTestClient } = this;
+
+      const itemID = uuid.v1();
+      const itemName = `Item`;
+      const item = { ID: itemID };
+
+      return $datastore.addItemToListByName(itemName, item)
+        .then(() => {
+
+          return Promise.promisify($$redisTestClient.lpop, { context: $$redisTestClient })(itemName);
+        })
+        .then(NucleusDatastore.parseItem)
+        .then((result) => {
+          chai.expect(result).to.deep.equal(item);
+        });
+    });
+
+    mocha.test("Items of type number is correctly added to the list.", function () {
+      const { $datastore, $$redisTestClient } = this;
+
+      const itemName = `Item`;
+      const item = 1;
+
+      return $datastore.addItemToListByName(itemName, item)
+        .then(() => {
+
+          return Promise.promisify($$redisTestClient.lpop, { context: $$redisTestClient })(itemName);
+        })
+        .then(NucleusDatastore.parseItem)
+        .then((result) => {
+          chai.expect(result).to.equal(item);
+        });
+    });
+
+    mocha.test.skip("A list of item is correctly added to the (Redis) list.", function () {
+      const { $datastore, $$redisTestClient } = this;
+
+      const itemName = 'Item';
+      const itemIDList = Array.apply(null, { length: 5 })
+        .map(() => {
+
+          return uuid.v1();
+        });
+
+      return $datastore.addItemToListByName(itemName, itemIDList)
+        .then(() => {
+
+          return Promise.promisify($$redisTestClient.lrange, { context:$$redisTestClient })(itemName, 0, -1);
+        })
+        .then((itemIDList) => {
+          chai.expect(itemIDList).to.equal('array');
+          chai.expect(itemIDList).to.have.length(5);
+        });
+    });
+
+    mocha.test("Using an undefined item name throws an error.", function () {
+      const { $datastore } = this;
+
+      const itemID = uuid.v1();
+      const item = itemID;
+
+      chai.expect(() => { $datastore.addItemToListByName(undefined, item); }).to.throw(NucleusError);
     });
 
   });
@@ -366,7 +453,7 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
           return $datastore.removeItemFromFieldByName(itemName, itemHashKey);
@@ -398,6 +485,23 @@ return { itemIDA, itemIDB, itemIDC }
       const item = itemID;
 
       chai.expect(() => { $datastore.removeItemFromFieldByName(itemName, undefined, item); }).to.throw(NucleusError);
+    });
+
+  });
+
+  mocha.suite("#retrieveItemFromListDeferred", function () {
+
+    mocha.test("The item is returned once another client pushes to the list.", function () {
+      const { $datastore } = this;
+      const $handlerDatastore = $datastore.duplicateConnection();
+      const listName = 'DummyList';
+
+      setTimeout($datastore.addItemToListByName, 1000, listName, uuid.v1());
+
+      return $handlerDatastore.retrieveItemFromListDeferred(listName)
+        .then((item) => {
+          chai.expect(item).to.be.a('string');
+        });
     });
 
   });
@@ -490,10 +594,10 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
-          return $datastore.retrieveItemFromFieldByName(itemName, itemHashKey);
+          return $datastore.retrieveItemFromHashFieldByName(itemName, itemHashKey);
         })
         .then((result) => {
           chai.expect(result).to.equal(item);
@@ -508,10 +612,10 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = { ID: itemID };
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
-          return $datastore.retrieveItemFromFieldByName(itemName, itemHashKey);
+          return $datastore.retrieveItemFromHashFieldByName(itemName, itemHashKey);
         })
         .then((result) => {
           chai.expect(result).to.deep.equal(item);
@@ -526,10 +630,10 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = [ itemID ];
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
-          return $datastore.retrieveItemFromFieldByName(itemName, itemHashKey);
+          return $datastore.retrieveItemFromHashFieldByName(itemName, itemHashKey);
         })
         .then((result) => {
           chai.expect(result).to.deep.equal(item);
@@ -544,10 +648,10 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = 1;
 
-      return $datastore.addItemToHashByName(itemName, itemHashKey, item)
+      return $datastore.addItemToHashFieldByName(itemName, itemHashKey, item)
         .then(() => {
 
-          return $datastore.retrieveItemFromFieldByName(itemName, itemHashKey);
+          return $datastore.retrieveItemFromHashFieldByName(itemName, itemHashKey);
         })
         .then((result) => {
           chai.expect(result).to.deep.equal(item);
@@ -561,7 +665,7 @@ return { itemIDA, itemIDB, itemIDC }
       const itemHashKey = `Hash:${itemID}`;
       const item = itemID;
 
-      chai.expect(() => { $datastore.retrieveItemFromFieldByName(undefined, itemHashKey, item); }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.retrieveItemFromHashFieldByName(undefined, itemHashKey); }).to.throw(NucleusError);
     });
 
     mocha.test("Using an undefined hash key throws an error.", function () {
@@ -571,7 +675,7 @@ return { itemIDA, itemIDB, itemIDC }
       const itemName = `Item`;
       const item = itemID;
 
-      chai.expect(() => { $datastore.retrieveItemFromFieldByName(itemName, undefined, item); }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.retrieveItemFromHashFieldByName(itemName, undefined); }).to.throw(NucleusError);
     });
 
   });

@@ -41,7 +41,7 @@ class NucleusDatastore {
     const { index: datastoreIndex = 0, port: datastorePort = 6379, URL: datastoreURL = 'localhost' } = options;
 
     this.name = datastoreName;
-    this.datastoreIndex = datastoreIndex;
+    this.index = datastoreIndex;
 
     this.$$server = redis.createClient({
       db: datastoreIndex,
@@ -71,19 +71,20 @@ class NucleusDatastore {
   }
 
   /**
-   * Adds an item to a hash given a field. `HMSET key field value`
+   * Adds an item to a hash given a field and its key. `HMSET key field value`
    *
    * @argument {String} itemKey
-   * @argument {String} itemField
-   * @argument {*} item
+   * @argument {String} [itemField]
+   * @argument {*} [item]
+   * @argument {*[]} [hashList]
    *
-   * @returns {Promise<void>}
+   * @returns {Promise<*>}
    *
    * @throws Will throw an error if the item key is missing or an empty string.
    * @throws Will throw an error if the item field is missing or an empty string.
    * @throws Will throw an error if an inconsistent list of item field and item is passed.
    */
-  addItemToHashByName (itemKey, ...hashList) {
+  addItemToHashFieldByName (itemKey, ...hashList) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
 
     if (hashList.length === 2) {
@@ -102,8 +103,31 @@ class NucleusDatastore {
           else return NucleusDatastore.stringifyItem(item);
         });
 
-      return this.$$server.hmsetAsync(itemKey, hashList);
+      return this.$$server.hmsetAsync(itemKey, hashList)
+        .return(hashList);
     } else throw new NucleusError.UndefinedContextNucleusError("The number of item field and item provided is inconsistent");
+  }
+
+  /**
+   * Adds an item to a list given its key. `LPUSH key value`
+   *
+   * @argument {String} itemKey
+   * @argument {*} item
+   * @argument {*[]} [itemList]
+   *
+   * @returns {Promise<*>}
+   *
+   * @throws Will throw an error if the item key is missing or an empty string.
+   */
+  addItemToListByName (itemKey, item) {
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+
+    if (nucleusValidator.isArray(item)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item should not be an array.");
+
+    const stringifiedItem = NucleusDatastore.stringifyItem(item);
+
+    return this.$$server.lpushAsync(itemKey, stringifiedItem)
+      .return(item);
   }
 
   /**
@@ -117,7 +141,7 @@ class NucleusDatastore {
    * @throws Will throw an error if the item key is missing or an empty string.
    * @throws Will throw an error if the item is not a string.
    */
-  addItemToSet (itemKey, item) {
+  addItemToSetByName (itemKey, item) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
     if (!nucleusValidator.isString(item)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item must be a string.");
 
@@ -283,6 +307,13 @@ class NucleusDatastore {
       .return(null);
   }
 
+  retrieveAllItemsFromHashByName (itemKey) {
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
+
+    return this.$$server.hgetallAsync(itemKey)
+      .then(NucleusDatastore.parseHashItem);
+  }
+
   /**
    * Retrieves an item given its key. `GET key`
    *
@@ -303,19 +334,62 @@ class NucleusDatastore {
    * Remove an item from a hash given an item field. `HMDEL key field`
    *
    * @argument {String} itemKey
-   * @argument {String} itemField
+   * @argument {String} [itemField]
+   * @argument {String[]} [itemFieldList]
    *
    * @returns {Promise<*>}
    *
    * @throws Will throw an error if the item key is missing or an empty string.
    * @throws Will throw an error if the item field is missing or an empty string.
    */
-  retrieveItemFromFieldByName (itemKey, itemField) {
+  retrieveItemFromHashFieldByName (itemKey, ...itemFieldList) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
-    if (!nucleusValidator.isString(itemField)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string.");
 
-    return this.$$server.hgetAsync(itemKey, itemField)
+    if (itemFieldList.length === 1) {
+      const itemField = itemFieldList[0];
+
+      if (!nucleusValidator.isString(itemField)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item field must be a string.");
+
+      return this.$$server.hgetAsync(itemKey, itemField)
+        .then(NucleusDatastore.parseItem);
+    }
+
+    return this.$$server.hmgetAsync(itemKey, itemFieldList)
       .then(NucleusDatastore.parseItem);
+  }
+
+  /**
+   * Retrieves an item from a list but blocks the client if the list is empty. `BRPOP key timeout`
+   *
+   * @argument {String} itemKey
+   *
+   * @returns {Promise}
+   */
+  retrieveItemFromListDeferred (itemKey) {
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+
+    return (new Promise((resolve, reject) => {
+      try {
+        this.$$server.brpop(itemKey, 0, function (error, [ itemKey, item ]) {
+          if (!!error) {
+            reject(error);
+
+            return;
+          }
+
+          if (nucleusValidator.isObject(itemKey)) {
+            const { code: redisErrorCode, message: redisErrorMessage } = itemKey;
+
+            if (redisErrorCode === 'ERR') reject(new NucleusError(`Could not retrieve the item from the list because of an external error: ${redisErrorCode}`));
+          }
+
+          resolve(item);
+        });
+      } catch (error) {
+
+        reject(new NucleusError(`Could not retrieve the item from the list because of an external error: ${error}`, { error }));
+      }
+    }));
   }
 
   /**
@@ -361,13 +435,52 @@ class NucleusDatastore {
   }
 
   /**
-   * Parse an item to a native data type.
+   * Parses a hash item list into an object.
+   *
+   * @argument {Array} itemList
+   *
+   * @returns {Object}
+   */
+  static parseHashItem (itemList = []) {
+    // The most recent version of NPM redis returns an object as expected.
+    if (nucleusValidator.isObject(itemList)) return NucleusDatastore.parseItem(itemList);
+
+    return itemList
+      .reduce((accumulator, item, index, list) => {
+        if (index % 2 === 0) return accumulator;
+        else {
+          accumulator[list[index - 1]] = item;
+
+          return accumulator;
+        }
+      }, {});
+  }
+
+  /**
+   * Parses an item to a native data type.
    *
    * @argument {String} item
    *
    * @returns {*}
    */
   static parseItem (item) {
+    if (nucleusValidator.isArray(item)) {
+
+      return item.map(NucleusDatastore.parseItem);
+    }
+
+    if (nucleusValidator.isObject(item)) {
+
+      return Object.keys(item)
+        .reduce((accumulator, key) => {
+          const parsedValue = NucleusDatastore.parseItem(item[key]);
+
+          accumulator[key] = parsedValue;
+
+          return accumulator;
+        }, {});
+    }
+
     try {
 
       return JSON.parse(item);
@@ -378,7 +491,7 @@ class NucleusDatastore {
   }
 
   /**
-   * Stringify a native data type.
+   * Stringifies a native data type.
    *
    * @argument {*} item
    *

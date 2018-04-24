@@ -78,8 +78,8 @@ mocha.suite('Nucleus Engine', function () {
   mocha.suiteSetup(async function () {
     const { $datastore } = this;
 
-    await $datastore.addItemToSet(ACTION_QUEUE_NAME_SET_ITEM_NAME, 'Dummy');
-    await $datastore.addItemToHashByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, 'ExecuteSimpleDummy', 'Dummy');
+    await $datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME, 'Dummy');
+    await $datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, 'ExecuteSimpleDummy', 'Dummy');
 
   });
 
@@ -94,6 +94,17 @@ mocha.suite('Nucleus Engine', function () {
     mocha.suiteSetup(function () {
       class DummyEngine extends NucleusEngine {
 
+        constructor () {
+          super('Dummy');
+        }
+
+        /**
+         * Executes a simple dummy.
+         *
+         * @Nucleus ActionName ExecuteSimpleDummy
+         *
+         * @returns {Promise}
+         */
         executeSimpleDummy () {
 
           return Promise.resolve({ AID: uuid.v1() });
@@ -119,11 +130,11 @@ mocha.suite('Nucleus Engine', function () {
     mocha.suiteSetup(async function () {
       const { $datastore } = this;
 
-      await $datastore.addItemToHashByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummy', {
+      await $datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummy', {
         methodName: 'executeSimpleDummy'
       });
 
-      await $datastore.addItemToHashByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummyWithArguments', {
+      await $datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummyWithArguments', {
         actionSignature: [ 'AID1', 'AID2' ],
         argumentConfigurationByArgumentName: {
           AID1: 'string',
@@ -233,7 +244,7 @@ mocha.suite('Nucleus Engine', function () {
         const { $datastore } = this;
         const $handlerDatastore = this.$datastore.duplicateConnection();
 
-        // Manually publish an event informing of that the action's status was updated.
+        // Manually update the action's item's status and final message.
         // This will trigger the #publishActionByNameAndHandleResponse to resolve with the response;
 
         await $handlerDatastore.$$server.subscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
@@ -242,24 +253,13 @@ mocha.suite('Nucleus Engine', function () {
           if (channelName !== `__keyspace@${DATASTORE_INDEX}__:Dummy` || redisCommand !== 'lpush') return;
 
           const actionItemKey = await $datastore.$$server.lpopAsync('Dummy');
-          const [ itemType, actionName, actionID ] = actionItemKey.split(':');
 
-          $datastore.$$server.publish(`Action:${actionID}`, JSON.stringify({
-            name: 'ActionStatusUpdated',
-            message: {
-              actionFinalMessage: {
-                dummy: { ID: uuid.v4() }
-              },
-              actionID,
-              actionName,
-              actionStatus: 'Completed'
-            }
-          }));
+          await $datastore.addItemToHashFieldByName(actionItemKey, 'finalMessage', { dummy: { ID: uuid.v4() } }, 'status', NucleusAction.CompletedActionStatus);
 
           await $handlerDatastore.$$server.unsubscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
         });
 
-        return Promise.resolve();
+        return Promise.delay(1000);
       });
 
       mocha.test("The response is returned once the action has been fulfilled.", async function () {
@@ -269,6 +269,74 @@ mocha.suite('Nucleus Engine', function () {
         const { dummy } = await $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', { iam: 'special' }, userID);
 
         chai.expect(dummy).to.be.an('object');
+      });
+
+    });
+
+    mocha.suite.skip("Load testing", function () {
+      // NOTE: Test aren't satisfactory. There is a clear degradation as the number of request increase.
+      // 50, 100 or more requests made under a second is an unusual load, but the process needs to be optimized.
+
+      mocha.teardown(function () {
+        const { $datastore } = this;
+
+        return $datastore.removeItemByName('Dummy');
+      });
+
+      mocha.suiteTeardown(function () {
+        const { $datastore } = this;
+
+        return $datastore.evaluateLUAScript(`return redis.call('INFO', 'Memory')`)
+          .then(console.log);
+      });
+
+      mocha.suite("Action publication", function () {
+        const requestCountList = [ 25, 50, 100, 500 ];
+
+        requestCountList
+          .forEach((requestCount) => {
+
+            mocha.test(`${requestCount} requests...`, function () {
+              const { $engine } = this;
+
+              return Promise.all(Array.apply(null, { length: requestCount })
+                .map(() => {
+                  const userID = uuid.v4();
+                  const $action = new NucleusAction('ExecuteSimpleDummy', {}, userID);
+
+                  return $engine.publishActionToQueueByName('Dummy', $action);
+                }));
+            });
+
+          });
+
+      });
+
+      mocha.suite("Full request loop", function () {
+        const requestCountList = [ 25, 50, 100, 500 ];
+
+        mocha.suiteSetup(function () {
+          const { $dummyEngine } = this;
+
+          return $dummyEngine.subscribeToActionQueueUpdate('Dummy');
+        });
+
+        requestCountList
+          .forEach((requestCount) => {
+
+            mocha.test(`${requestCount} requests...`, function () {
+              const { $engine } = this;
+
+              return Promise.all(Array.apply(null, { length: requestCount })
+                .map(() => {
+                  const userID = uuid.v4();
+
+                  return $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', {}, userID);
+                }));
+            });
+
+          });
+
       });
 
     });

@@ -7,11 +7,14 @@
  *
  * @requires NPM:node-uuid
  * @requires ./Error.nucleus
+ * @requires ./validator.nucleus
  */
 
 const uuid = require('node-uuid');
 
 const NucleusError = require('./Error.nucleus');
+
+const nucleusValidator = require('./validator.nucleus');
 
 /**
  * @module NucleusResource
@@ -37,8 +40,24 @@ class NucleusResource {
    * @returns {NucleusResource}
    */
   constructor (resourceType = 'Undefined', resourceMeta = {}, originUserID = 'Unknown') {
-    if (arguments.length === 1 && arguments[0] instanceof this.constructor) Object.assign(this, arguments[0]);
-    else {
+    if (arguments.length === 2 && (nucleusValidator.isObject(arguments[1]))) {
+      Object.assign(this, arguments[1]);
+
+      Reflect.defineProperty(this, 'ID', { writable: false });
+
+      Reflect.defineProperty(this, 'type', { value: resourceType, writable: false });
+
+      Reflect.defineProperty(this, 'meta', {
+        value: Object.assign(NucleusResource.generateAttributeProxy(), this.meta, {
+          [Symbol.toPrimitive] () {
+
+            return `${resourceType} created on ${this.createdISOTime} by ${this.originUserID}.`;
+          }
+        }),
+        writable: true
+      });
+
+    } else {
       /** @member {String} ID */
       Reflect.defineProperty(this, 'ID', { value: uuid.v1(), writable: false });
 

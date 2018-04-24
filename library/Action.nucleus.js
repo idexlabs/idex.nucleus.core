@@ -50,12 +50,13 @@ const NucleusActionStatusWeightList = [
  * @property {String} status
  */
 
-class NucleusAction extends NucleusResource{
+class NucleusAction extends NucleusResource {
 
   /**
    * Creates a Nucleus Action.
    * @example
    * const $action = new NucleusAction(actionName, actionMessage, options);
+   * const $action = new NucleusAction({ meta: { ... }, name: actionName, originalMessage: actionMessage,... });
    *
    * @argument {String} actionName
    * @argument {Object} actionMessage
@@ -71,6 +72,21 @@ class NucleusAction extends NucleusResource{
    */
   constructor (actionName, actionMessage = {}, options = {}) {
     if (arguments.length === 1 && arguments[0] instanceof NucleusAction) return arguments[0];
+
+    if (arguments.length === 1 && nucleusValidator.isObject(arguments[0])) {
+      const action = arguments[0];
+
+      super('NucleusAction', action);
+
+      Reflect.defineProperty(this, 'name', { writable: false });
+
+      Reflect.defineProperty(this, 'originalMessage', {
+        value: Object.assign(NucleusAction.generateAttributeProxy(), this.originalMessage),
+        writable: false
+      });
+
+      Object.freeze(this.originalMessage);
+    }
     else {
       if (!nucleusValidator.isString(actionName) || nucleusValidator.isEmpty(actionName)) throw new NucleusError.UndefinedValueNucleusError("The action name is mandatory.");
 
@@ -96,7 +112,7 @@ class NucleusAction extends NucleusResource{
       this.status = undefined;
     }
 
-    Reflect.preventExtensions(this);
+    // Reflect.preventExtensions(this);
   }
 
 

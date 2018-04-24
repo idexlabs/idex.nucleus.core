@@ -11,111 +11,251 @@ const NucleusError = require('../library/Error.nucleus');
 
 mocha.suite('Nucleus Action', function () {
 
-  mocha.test("The action requires a name and a message.", function () {
-    const actionName = 'DummyAction';
-    const actionMessage = { AID: uuid.v1() };
+  mocha.suite("Default signature", function () {
 
-    const $action = new NucleusAction(actionName, actionMessage);
+    mocha.test("The action requires a name and a message.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
 
-    chai.expect($action).to.have.ownProperty('ID');
-    chai.expect($action).to.have.ownProperty('name');
-    chai.expect($action).to.have.ownProperty('originalMessage');
+      const $action = new NucleusAction(actionName, actionMessage);
 
-    chai.expect($action.name).to.equal(actionName);
-    chai.expect($action.originalMessage).to.deep.equal(actionMessage);
-  });
+      chai.expect($action).to.have.ownProperty('ID');
+      chai.expect($action).to.have.ownProperty('name');
+      chai.expect($action).to.have.ownProperty('originalMessage');
 
-  mocha.test("The action's ID, name and original message are not writable.", function () {
-    const actionName = 'DummyAction';
-    const actionMessage = { AID: uuid.v1() };
+      chai.expect($action.name).to.equal(actionName);
+      chai.expect($action.originalMessage).to.deep.equal(actionMessage);
+    });
 
-    const $action = new NucleusAction(actionName, actionMessage);
+    mocha.test("The action's ID, name and original message are not writable.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
 
-    const { ID: actionID, originalMessage: actionOriginalMessage } = $action;
-    const { AID: actionAID } = actionOriginalMessage;
+      const $action = new NucleusAction(actionName, actionMessage);
 
-    try { $action.ID = uuid.v1(); } catch (error) {}
-    try { $action.name = 'ReallyDummyAction'; } catch (error) {}
-    try { $action.originalMessage.AID = uuid.v1(); } catch (error) {}
-    try { $action.originalMessage.AID2 = uuid.v1(); } catch (error) {}
+      const { ID: actionID, originalMessage: actionOriginalMessage } = $action;
+      const { AID: actionAID } = actionOriginalMessage;
 
-    chai.expect($action.ID).to.equal(actionID);
-    chai.expect($action.name).to.equal(actionName);
-    chai.expect($action.originalMessage.AID).to.equal(actionAID);
-    chai.expect($action.originalMessage).to.deep.equal(actionOriginalMessage);
+      try { $action.ID = uuid.v1(); } catch (error) {}
+      try { $action.name = 'ReallyDummyAction'; } catch (error) {}
+      try { $action.originalMessage.AID = uuid.v1(); } catch (error) {}
+      try { $action.originalMessage.AID2 = uuid.v1(); } catch (error) {}
 
-  });
+      chai.expect($action.ID).to.equal(actionID);
+      chai.expect($action.name).to.equal(actionName);
+      chai.expect($action.originalMessage.AID).to.equal(actionAID);
+      chai.expect($action.originalMessage).to.deep.equal(actionOriginalMessage);
 
-  mocha.test("The action's meta is converted to a convenience string if forced to string.", function () {
-    const actionName = 'DummyAction';
-    const actionMessage = { AID: uuid.v1() };
+    });
 
-    const $action = new NucleusAction(actionName, actionMessage);
-    const actionMetaPrimitive = `${$action.meta}`;
+    mocha.test("The action's meta is converted to a convenience string if forced to string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
 
-    chai.expect(actionMetaPrimitive).to.equal(`NucleusAction created on ${$action.meta.createdISOTime} by ${$action.meta.originUserID}.`);
-  });
+      const $action = new NucleusAction(actionName, actionMessage);
+      const actionMetaPrimitive = `${$action.meta}`;
 
-  mocha.test("The action's meta has a `toString` method that converts the meta object to a JSON string.", function () {
-    const actionName = 'DummyAction';
-    const actionMessage = { AID: uuid.v1() };
+      chai.expect(actionMetaPrimitive).to.equal(`NucleusAction created on ${$action.meta.createdISOTime} by ${$action.meta.originUserID}.`);
+    });
 
-    const $action = new NucleusAction(actionName, actionMessage);
-    const actionMeta = $action.meta;
-    const actionMetaStringified = $action.meta.toString();
+    mocha.test("The action's meta has a `toString` method that converts the meta object to a JSON string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
 
-    const actionMetaStringifiedParsed = JSON.parse(actionMetaStringified);
+      const $action = new NucleusAction(actionName, actionMessage);
+      const actionMeta = $action.meta;
+      const actionMetaStringified = $action.meta.toString();
 
-    chai.expect(actionMetaStringifiedParsed).to.deep.equal(actionMeta);
-  });
+      const actionMetaStringifiedParsed = JSON.parse(actionMetaStringified);
 
-  mocha.test("The action's original message has a `toString` method that converts the original message object to a JSON string.", function () {
-    const actionName = 'DummyAction';
-    const actionMessage = { AID: uuid.v1() };
+      chai.expect(actionMetaStringifiedParsed).to.deep.equal(actionMeta);
+    });
 
-    const $action = new NucleusAction(actionName, actionMessage);
-    const actionOriginalMessageStringified = $action.originalMessage.toString();
+    mocha.test("The action's original message has a `toString` method that converts the original message object to a JSON string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
 
-    const actionOriginalMessageStringifiedParsed = JSON.parse(actionOriginalMessageStringified);
+      const $action = new NucleusAction(actionName, actionMessage);
+      const actionOriginalMessageStringified = $action.originalMessage.toString();
 
-    chai.expect(actionOriginalMessageStringifiedParsed).to.deep.equal(actionMessage);
-  });
+      const actionOriginalMessageStringifiedParsed = JSON.parse(actionOriginalMessageStringified);
 
-  mocha.test("Using an undefined action name throws an error.", function () {
-    chai.expect(function () { new NucleusAction(undefined, {}); }).to.throw(NucleusError);
-    chai.expect(function () { new NucleusAction('', {}); }).to.throw(NucleusError);
-  });
+      chai.expect(actionOriginalMessageStringifiedParsed).to.deep.equal(actionMessage);
+    });
 
-  mocha.test("The action is converted to a convenience string if force to string.", function () {
-    const $action = new NucleusAction('DummyAction', {});
-    const actionPrimitive = `${$action}`;
+    mocha.test("Using an undefined action name throws an error.", function () {
+      chai.expect(function () { new NucleusAction(undefined, {}); }).to.throw(NucleusError);
+      chai.expect(function () { new NucleusAction('', {}); }).to.throw(NucleusError);
+    });
 
-    chai.expect(actionPrimitive).to.equal(`NucleusAction:${$action.name}:${$action.ID}`);
-  });
+    mocha.test("The action is converted to a convenience string if force to string.", function () {
+      const $action = new NucleusAction('DummyAction', {});
+      const actionPrimitive = `${$action}`;
 
-  mocha.test("An action list could be sorted by status.", function () {
-    const $action1 = new NucleusAction('DummyAction', {});
-    const $action2 = new NucleusAction('DummyAction', {});
-    const $action3 = new NucleusAction('DummyAction', {});
-    const $action4 = new NucleusAction('DummyAction', {});
+      chai.expect(actionPrimitive).to.equal(`NucleusAction:${$action.name}:${$action.ID}`);
+    });
 
-    $action1.updateStatus(NucleusAction.CompletedActionStatus);
-    $action2.updateStatus(NucleusAction.CompletedActionStatus);
-    $action3.updateStatus(NucleusAction.PendingActionStatus);
-    $action4.updateStatus(NucleusAction.ProcessingActionStatus);
+    mocha.test("An action list could be sorted by status.", function () {
+      const $action1 = new NucleusAction('DummyAction', {});
+      const $action2 = new NucleusAction('DummyAction', {});
+      const $action3 = new NucleusAction('DummyAction', {});
+      const $action4 = new NucleusAction('DummyAction', {});
 
-    const actionList = [ $action1, $action2, $action3, $action4 ];
-    const orderedActionIDList = actionList
-      .sort(($actionA, $actionB) => {
+      $action1.updateStatus(NucleusAction.CompletedActionStatus);
+      $action2.updateStatus(NucleusAction.CompletedActionStatus);
+      $action3.updateStatus(NucleusAction.PendingActionStatus);
+      $action4.updateStatus(NucleusAction.ProcessingActionStatus);
 
-        return +$actionA - +$actionB;
-      })
-      .map(($action) => {
+      const actionList = [ $action1, $action2, $action3, $action4 ];
+      const orderedActionIDList = actionList
+        .sort(($actionA, $actionB) => {
 
-        return $action.ID;
-      });
+          return +$actionA - +$actionB;
+        })
+        .map(($action) => {
+
+          return $action.ID;
+        });
 
       chai.expect(orderedActionIDList).to.deep.equal([$action3.ID, $action4.ID, $action1.ID, $action2.ID]);
+    });
+
+  });
+
+  mocha.suite("Action-like signature", function () {
+
+    mocha.test("The action's ID, name and original message are not writable.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
+      const userID = uuid.v4();
+
+      const $action = new NucleusAction({
+        ID: uuid.v1(),
+        name: actionName,
+        originalMessage: actionMessage,
+        meta: {
+          createdISOTime: new Date().toISOString(),
+          originEngineID: uuid.v4(),
+          originEngineName: 'Dummy',
+          originProcessID: process.pid,
+          originUserID: userID
+        },
+        originUserID: userID
+      });
+
+      const { ID: actionID, originalMessage: actionOriginalMessage } = $action;
+      const { AID: actionAID } = actionOriginalMessage;
+
+      try { $action.ID = uuid.v1(); } catch (error) {}
+      try { $action.name = 'ReallyDummyAction'; } catch (error) {}
+      try { $action.originalMessage.AID = uuid.v1(); } catch (error) {}
+      try { $action.originalMessage.AID2 = uuid.v1(); } catch (error) {}
+
+      chai.expect($action.ID).to.equal(actionID);
+      chai.expect($action.name).to.equal(actionName);
+      chai.expect($action.originalMessage.AID).to.equal(actionAID);
+      chai.expect($action.originalMessage).to.deep.equal(actionOriginalMessage);
+
+    });
+
+    mocha.test("The action's meta is converted to a convenience string if forced to string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
+      const userID = uuid.v4();
+
+      const $action = new NucleusAction({
+        ID: uuid.v1(),
+        name: actionName,
+        originalMessage: actionMessage,
+        meta: {
+          createdISOTime: new Date().toISOString(),
+          originEngineID: uuid.v4(),
+          originEngineName: 'Dummy',
+          originProcessID: process.pid,
+          originUserID: userID
+        },
+        originUserID: userID
+      });
+
+      const actionMetaPrimitive = `${$action.meta}`;
+
+      chai.expect(actionMetaPrimitive).to.equal(`NucleusAction created on ${$action.meta.createdISOTime} by ${$action.meta.originUserID}.`);
+    });
+
+    mocha.test("The action's meta has a `toString` method that converts the meta object to a JSON string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
+      const userID = uuid.v4();
+
+      const $action = new NucleusAction({
+        ID: uuid.v1(),
+        name: actionName,
+        originalMessage: actionMessage,
+        meta: {
+          createdISOTime: new Date().toISOString(),
+          originEngineID: uuid.v4(),
+          originEngineName: 'Dummy',
+          originProcessID: process.pid,
+          originUserID: userID
+        },
+        originUserID: userID
+      });
+      const actionMeta = $action.meta;
+      const actionMetaStringified = $action.meta.toString();
+
+      const actionMetaStringifiedParsed = JSON.parse(actionMetaStringified);
+
+      chai.expect(actionMetaStringifiedParsed).to.deep.equal(actionMeta);
+    });
+
+    mocha.test("The action's original message has a `toString` method that converts the original message object to a JSON string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = { AID: uuid.v1() };
+      const userID = uuid.v4();
+
+      const $action = new NucleusAction({
+        ID: uuid.v1(),
+        name: actionName,
+        originalMessage: actionMessage,
+        meta: {
+          createdISOTime: new Date().toISOString(),
+          originEngineID: uuid.v4(),
+          originEngineName: 'Dummy',
+          originProcessID: process.pid,
+          originUserID: userID
+        },
+        originUserID: userID
+      });
+      const actionOriginalMessageStringified = $action.originalMessage.toString();
+
+      const actionOriginalMessageStringifiedParsed = JSON.parse(actionOriginalMessageStringified);
+
+      chai.expect(actionOriginalMessageStringifiedParsed).to.deep.equal(actionMessage);
+    });
+
+    mocha.test("The action is converted to a convenience string if force to string.", function () {
+      const actionName = 'DummyAction';
+      const actionMessage = {};
+      const userID = uuid.v4();
+
+      const $action = new NucleusAction({
+        ID: uuid.v1(),
+        name: actionName,
+        originalMessage: actionMessage,
+        meta: {
+          createdISOTime: new Date().toISOString(),
+          originEngineID: uuid.v4(),
+          originEngineName: 'Dummy',
+          originProcessID: process.pid,
+          originUserID: userID
+        },
+        originUserID: userID
+      });
+      const actionPrimitive = `${$action}`;
+
+      chai.expect(actionPrimitive).to.equal(`NucleusAction:${$action.name}:${$action.ID}`);
+    });
+
   });
 
   mocha.suite('#updateMessage', function () {

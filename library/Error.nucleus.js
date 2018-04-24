@@ -27,8 +27,10 @@ class NucleusError extends Error {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage, error) {
+  constructor (errorMessage, options = {}) {
     super(errorMessage);
+
+    const { error } = options;
 
     if (!!error && error instanceof Error) this.stack = error.stack;
 
