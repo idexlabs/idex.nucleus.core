@@ -67,11 +67,28 @@ const isString = (value) => {
   return typeof value === 'string';
 };
 
+/**
+ * Replaces the first letter to lower case.
+ *
+ * @argument {String} string
+ *
+ * @returns {String}
+ */
+const shiftFirstLetterToLowerCase = (string) => {
+
+  return string.replace(new RegExp('^\\${0,1}([A-Z])(?![A-Z]{2,})'), (match) => {
+
+    return match.toLowerCase();
+  });
+};
+
+
 module.exports = {
   isArray,
   isEmpty,
   isNumber,
   isObject,
   isString,
+  shiftFirstLetterToLowerCase,
   struct
 };

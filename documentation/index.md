@@ -32,7 +32,6 @@ class DummyEngine extends NucleusEngine {
   
 }
 
-
 // ---
 
 // Instantiate the engines that was created.
@@ -40,15 +39,15 @@ const $dummyEngine = new DummyEngine();
 const $testEngine = new NucleusEngine();
 
 // Wait for both engine to be initialized and ready to use.
-await $dummyEngine;
-await $testEngine;
-
-// Use the Test engine to publish an action named "Ping".
-// Behind the scene, the Dummy engine will respond to the request by executing the $dummyEngine.ping function.
-const { ping } = $testEngine.publishActionByNameAndHandleResponse('Ping', {});
-
-console.log(ping);
-// $ Ping
+Promise.all([ $dummyEngine, $testEngine ])
+  .then(async () => {
+    // Use the Test engine to publish an action named "Ping".
+    // Behind the scene, the Dummy engine will respond to the request by executing the $dummyEngine.ping function.
+    const { ping } = await $testEngine.publishActionByNameAndHandleResponse('Ping', {});
+    
+    console.log(ping);
+    // $ Ping
+  });
 ```
 
 ### Event

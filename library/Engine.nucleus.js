@@ -5,6 +5,8 @@
  *
  * @author Sebastien Filion
  *
+ * @Nucleus HelloWorld Hello World!
+ *
  * @requires NPM:bluebird
  * @requires NPM:node-uuid
  * @requires ./Action.nucleus
@@ -15,7 +17,10 @@
  */
 
 const Promise = require('bluebird');
+const childProcess = require('child_process');
+const JSDocParser = require.resolve('jsdoc/jsdoc.js');
 const uuid = require('node-uuid');
+const path = require('path');
 
 const NucleusAction = require('./Action.nucleus');
 const NucleusDatastore = require('./Datastore.nucleus');
@@ -33,6 +38,9 @@ const DEVELOPMENT_ENVIRONMENT_NAME = 'development';
 const TESTING_ENVIRONMENT_NAME = 'testing';
 const PRODUCTION_ENVIRONMENT_NAME = 'production';
 
+const $$complexDataTypeRegularExpression = new RegExp(/([a-z]+)\.<[A-Za-z]+>/);
+const $$engineFileNameRegularExpression = new RegExp(/.*engine\.js$/);
+
 class NucleusEngine {
 
   /**
@@ -45,6 +53,7 @@ class NucleusEngine {
    * @argument {NucleusDatastore} [options.$engineDatastore]
    * @argument {NucleusDatastore} [options.$eventDatastore]
    * @argument {NucleusDatastore} [options.$logger]
+   * @argument {Boolean} [options.automaticallyAutodiscover=false]
    * @argument {Boolean} [options.automaticallyRetrievePendingActions=false]
    * @argument {String} [options.defaultActionQueueName=<Engine's name>]
    *
@@ -56,6 +65,7 @@ class NucleusEngine {
       $engineDatastore = new NucleusDatastore(),
       $eventDatastore = new NucleusDatastore(),
       $logger = console,
+      automaticallyAutodiscover = false,
       automaticallyRetrievePendingActions = false,
       defaultActionQueueName = engineName
     } = options;
@@ -85,6 +95,8 @@ class NucleusEngine {
     // Execute everything needed during the initialization phase of the engine.
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
       .then(this.verifyRedisConfiguration.bind(this))
+      .then(() => { return this.$datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME, this.defaultActionQueueName); })
+      .then(() => { if (automaticallyAutodiscover) return this.autodiscover(); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
@@ -100,12 +112,105 @@ class NucleusEngine {
       }
     });
 
-    Reflect.preventExtensions(this);
-
     this.$eventSubscriberDatastore.$$server.on('message', handleRedisEvent.bind({ $engine: this }));
     this.$eventSubscriberDatastore.$$server.on('pmessage', handleRedisEvent.bind({ $engine: this }));
 
     return $$proxy;
+  }
+
+  /**
+   * Autodiscovers the module's actions.
+   *
+   * @returns {Promise<{actionConfigurationList: Object}>}
+   */
+  async autodiscover () {
+    const engineDirectoryPath = NucleusEngine.retrieveModuleDirectoryPath(this.name);
+    // Retrieve all of the modules doclets using the JSDoc parser.
+    const docletList = await new Promise((resolve, reject) => {
+      const chunkList = [];
+      const $$childProcess = childProcess.spawn(JSDocParser, [ '-X', '-r', engineDirectoryPath ], { cwd: process.cwd() });
+
+      $$childProcess.stdout.setEncoding('utf8');
+      $$childProcess.stderr.setEncoding('utf8');
+
+      $$childProcess.stdout.on('data', chunkList.push.bind(chunkList));
+      $$childProcess.stderr.on('data', reject);
+
+      $$childProcess.on('close', () => {
+        const docletList = JSON.parse(chunkList.join(""));
+
+        resolve(docletList);
+      });
+      $$childProcess.on('error', reject);
+    });
+
+    // Filter out doclets that does not have a "Nucleus" tag.
+    const filteredDocletList = docletList
+      .filter((doclet) => {
+
+        return (nucleusValidator.isArray(doclet.tags)) ? doclet.tags[0].title === 'nucleus' : false;
+      });
+
+    // Collect all relevant data from the filtered doclet.
+    const actionConfigurationList = filteredDocletList
+      .filter(({ kind }) => {
+
+        return kind === 'function';
+      })
+      .map((doclet) => {
+        const nucleusTagsByName = doclet.tags
+          .reduce((accumulator, { value }) => {
+            const [ nucleusTagName, ...nucleusTagOptionList ] = value.split(" ");
+
+            accumulator[nucleusValidator.shiftFirstLetterToLowerCase(nucleusTagName)] = (
+              (nucleusTagOptionList.length === 1) ?
+              nucleusTagOptionList[0] :
+              nucleusTagOptionList
+            );
+
+            return accumulator;
+          }, {});
+
+        const argumentConfigurationByArgumentName = doclet.params
+          .reduce((accumulator, { name: argumentName, optional: argumentIsOptional, type: { names: argumentTypeList } }) => {
+            const cleanedArgumentType = nucleusValidator.shiftFirstLetterToLowerCase(argumentTypeList.join('|')).replace($$complexDataTypeRegularExpression, "$1");
+            accumulator[argumentName] = (!!argumentIsOptional) ? `${cleanedArgumentType}?` : cleanedArgumentType;
+
+            return accumulator;
+          }, {});
+
+        return Object.assign({
+          actionSignature: doclet.meta.code.paramnames,
+          argumentConfigurationByArgumentName,
+          contextName: (doclet.memberof === `${this.name}Engine`) ? 'Self' : doclet.memberof,
+          fileName: doclet.meta.filename,
+          filePath: path.join(doclet.meta.path, doclet.meta.filename),
+          methodName: doclet.name
+        }, nucleusTagsByName);
+      });
+
+    await Promise.all(actionConfigurationList
+      .map((actionConfiguration) => {
+        const { actionName } = actionConfiguration;
+
+        return Promise.all([
+          this.$datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName, actionConfiguration),
+          this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, this.defaultActionQueueName, actionName)
+        ]);
+      }));
+
+    /**
+     * @namespace {Object} actionConfiguration
+     * @property {String} [actionEvent]
+     * @property {String} actionName
+     * @property {String[]} [alternativeActionSignature]
+     * @property {String[]} [actionSignature]
+     * @property {String} contextName=Self
+     * @property {String} fileName
+     * @property {String} filePath
+     * @property {String} methodName
+     */
+    return { actionConfigurationList };
   }
 
   /**
@@ -549,6 +654,19 @@ class NucleusEngine {
   save 60 10000
   `);
     }
+  }
+
+  /**
+   * Retrieves the current module directory path.
+   *
+   * @argument {Object} [moduleNode=module.parent] - Used for recursion.
+   * @argument {Object} [moduleDirectoryPath] - Used for recursion.
+   *
+   * @returns {String}
+   */
+  static retrieveModuleDirectoryPath (moduleName, moduleNode = module.parent) {
+    if (!new RegExp(`.*${moduleName}.*`).test(moduleNode.filename)) return NucleusEngine.retrieveModuleDirectoryPath(moduleName, moduleNode.parent);
+    else return path.dirname(moduleNode.filename);
   }
 
 }

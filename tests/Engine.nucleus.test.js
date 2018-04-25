@@ -13,6 +13,8 @@ const NucleusEngine = require('../library/Engine.nucleus');
 const NucleusError = require('../library/Error.nucleus');
 const NucleusEvent = require('../library/Event.nucleus');
 
+const DummyEngine = require('./Dummy.engine');
+
 const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
 const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
 const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
@@ -22,6 +24,17 @@ const DATASTORE_URL = 'localhost';
 const DATASTORE_PORT = 6379;
 
 mocha.suite('Nucleus Engine', function () {
+
+  mocha.suiteSetup(function () {
+    const $dummyEngine = new DummyEngine();
+
+    Reflect.defineProperty(this, '$dummyEngine', {
+      value: $dummyEngine,
+      writable: false
+    });
+
+    return $dummyEngine;
+  });
 
   mocha.suiteSetup(function () {
     const $actionDatastore = new NucleusDatastore('Action', {
@@ -90,42 +103,6 @@ mocha.suite('Nucleus Engine', function () {
   });
 
   mocha.suite("Actions", function () {
-
-    mocha.suiteSetup(function () {
-      class DummyEngine extends NucleusEngine {
-
-        constructor () {
-          super('Dummy');
-        }
-
-        /**
-         * Executes a simple dummy.
-         *
-         * @Nucleus ActionName ExecuteSimpleDummy
-         *
-         * @returns {Promise}
-         */
-        executeSimpleDummy () {
-
-          return Promise.resolve({ AID: uuid.v1() });
-        }
-
-        executeSimpleDummyWithArguments (AID1, AID2) {
-
-          return Promise.resolve({ AID1, AID2 });
-        }
-
-      }
-
-      const $dummyEngine = new DummyEngine();
-
-      Reflect.defineProperty(this, '$dummyEngine', {
-        value: $dummyEngine,
-        writable: false
-      });
-
-      return $dummyEngine;
-    });
 
     mocha.suiteSetup(async function () {
       const { $datastore } = this;
@@ -444,6 +421,41 @@ mocha.suite('Nucleus Engine', function () {
         });
       });
 
+    });
+
+  });
+
+  mocha.suite("Autodiscovery", function () {
+
+    mocha.test("Autodiscovery test", async function () {
+      const {$dummyEngine} = this;
+
+      const {actionConfigurationList} = await $dummyEngine.autodiscover();
+
+      chai.expect(actionConfigurationList).to.have.length(4);
+
+      chai.expect(actionConfigurationList[0]).to.deep.include({
+        actionName: 'ExecuteSimpleDummy'
+      });
+
+      chai.expect(actionConfigurationList[1]).to.deep.include({
+        actionName: 'ExecuteSimpleDummyWithArguments',
+        actionSignature: ['AID1', 'AID2']
+      });
+
+      chai.expect(actionConfigurationList[2]).to.deep.include({
+        actionName: 'ExecuteSimpleDummyWithEvent',
+        eventName: 'SimpleDummyWithEventExecuted'
+      });
+
+      chai.expect(actionConfigurationList[3]).to.deep.include({
+        actionName: 'ExecuteSimpleDummyWithComplexSignature',
+        actionSignature: ['AID1', 'AID2'],
+        actionAlternativeSignature: ['AID1', 'AID3']
+      });
+
+      return Promise.resolve()
+        .delay(1000);
     });
 
   });
