@@ -33,9 +33,14 @@ class APIGatewayEngine extends NucleusEngine {
       .then(() => {
         // GET /ping
         this.$$application.get('/ping', async (request, response) => {
-          const actionResponse = await this.publishActionByNameAndHandleResponse('Ping', {}, uuid.v4());
+          try {
+            const actionResponse = await this.publishActionByNameAndHandleResponse('Ping', {}, uuid.v4());
 
-          response.status(200).send(actionResponse).end();
+            response.status(200).send(actionResponse).end();
+          } catch (error) {
+
+            response.status(500).send(error).end();
+          }
         });
       });
   }

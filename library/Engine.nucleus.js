@@ -83,7 +83,6 @@ class NucleusEngine {
     this.$eventSubscriberDatastore = this.$eventDatastore.duplicateConnection();
 
     this.$handlerDatastoreByName = {};
-    this.$$handlerCallbackListByChannelName = {};
 
     this.$logger = $logger;
 
@@ -111,9 +110,6 @@ class NucleusEngine {
         else undefined;
       }
     });
-
-    this.$eventSubscriberDatastore.$$server.on('message', handleRedisEvent.bind({ $engine: this }));
-    this.$eventSubscriberDatastore.$$server.on('pmessage', handleRedisEvent.bind({ $engine: this }));
 
     return $$proxy;
   }
@@ -240,28 +236,6 @@ class NucleusEngine {
   }
 
   /**
-   * Executes all handler callback for a given channel name.
-   *
-   * @argument {String} channelName
-   * @argument {NucleusEvent} $event
-   *
-   * @returns {Promise}
-   */
-  executeHandlerCallbackForChannelName (channelName, $event) {
-    const $$handlerCallbackList = this.$$handlerCallbackListByChannelName[channelName];
-
-    if (nucleusValidator.isEmpty($$handlerCallbackList)) return;
-
-    this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, eventID: $event.ID, eventName: $event.name });
-
-    return Promise.all($$handlerCallbackList
-      .map(($$handlerCallback) => {
-
-        return Promise.resolve($$handlerCallback.call(this, $event));
-      }));
-  }
-
-  /**
    * Executes a pending action.
    *
    * @argument {NucleusAction} $action
@@ -281,7 +255,7 @@ class NucleusEngine {
       this.$logger.debug(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
 
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
 
       const { fileName = '', fileType = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
 
@@ -325,10 +299,9 @@ class NucleusEngine {
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       // 5. Send event to action channel.
-
       const $event = new NucleusEvent('ActionStatusUpdated', {
         actionFinalMessage: actionResponse,
         actionID,
@@ -346,26 +319,10 @@ class NucleusEngine {
 
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       return Promise.reject(error);
     }
-  }
-
-  /**
-   * Handles event published to a specific channel given a handler callback.
-   *
-   * @argument {String} channelName
-   * @argument {Function} handlerCallback
-   *
-   * @returns {Promise<Object>}
-   */
-  handleEventByChannelName (channelName, handlerCallback) {
-    if (!this.$$handlerCallbackListByChannelName.hasOwnProperty(channelName)) this.$$handlerCallbackListByChannelName[channelName] = [];
-
-    this.$$handlerCallbackListByChannelName[channelName].push(handlerCallback);
-
-    return Promise.resolve({ channelName, handlerCallback });
   }
 
   /**
@@ -400,7 +357,7 @@ class NucleusEngine {
       // Store the action as a hash item.
       .hmset(actionKeyName, 'ID', actionID, 'meta', $action.meta.toString(), 'name', actionName, 'status', $action.status, 'originalMessage', $action.originalMessage.toString(), 'originUserID', $action.originUserID)
       // Add the action key name into the appropriate action queue.
-      .lpush(actionQueueName, `${$action}`)
+      .lpush(actionQueueName, actionKeyName)
       // Expire the action in a set TTL, the action should be kept a little while for debugging but not for too long to
       // prevent unnecessary memory bulk-up.
       .pexpire(actionKeyName, this.actionTTL)
@@ -436,14 +393,14 @@ class NucleusEngine {
 
       const actionDatastoreIndex = this.$actionDatastore.index;
       const $actionSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty('ActionSubscriber')) ?
-        this.$handlerDatastoreByName['ActionSubscriber'] :
-        (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection());
+        this.$handlerDatastoreByName['ActionSubscriber'] : (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection());
 
       await $actionSubscriberDatastore;
 
-      await $actionSubscriberDatastore.$$server.subscribeAsync(`__keyspace@${actionDatastoreIndex}__:${actionItemKey}`);
+      const channelName = `__keyspace@${actionDatastoreIndex}__:${actionItemKey}`;
+      await $actionSubscriberDatastore.subscribeToChannelName(channelName);
 
-      $actionSubscriberDatastore.$$server.on('message', async (channelPattern, redisCommand) => {
+      $actionSubscriberDatastore.handleEventByChannelName(channelName, async (channelPattern, redisCommand) => {
         if (redisCommand !== 'hset' && redisCommand !== 'hmset') return;
 
         const [ keyspace, itemType, actionName, actionID ] = channelPattern.split(':');
@@ -457,7 +414,7 @@ class NucleusEngine {
             // Resolve or reject the promise with the final message base on the action's status.
             ((actionStatus === NucleusAction.CompletedActionStatus) ? resolve : reject)(actionFinalMessage);
 
-            $actionSubscriberDatastore.$$server.unsubscribeAsync(`__keyspace@${actionDatastoreIndex}__:${actionItemKey}`);
+            $actionSubscriberDatastore.unsubscribeFromChannelName(channelName);
           }
         } catch (error) {
 
@@ -563,9 +520,10 @@ class NucleusEngine {
       (this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] = this.$actionDatastore.duplicateConnection());
 
     try {
-      $actionQueueSubscriberDatastore.$$server.subscribe(`__keyspace@${actionDatastoreIndex}__:${actionQueueName}`);
+      const channelName = `__keyspace@${actionDatastoreIndex}__:${actionQueueName}`;
 
-      $actionQueueSubscriberDatastore.$$server.on('message', () => {
+      $actionQueueSubscriberDatastore.subscribeToChannelName(channelName);
+      $actionQueueSubscriberDatastore.handleEventByChannelName(channelName, () => {
 
         process.nextTick(this.retrievePendingAction.bind(this, actionQueueName));
       });
@@ -584,9 +542,9 @@ class NucleusEngine {
    *
    * @returns {Promise<void>}
    */
-  subscribeToChannelName (channelName) {
+  subscribeToEventChannelByName (channelName) {
 
-    return this.$eventSubscriberDatastore.$$server.subscribe(channelName);
+    return this.$eventSubscriberDatastore.subscribeToChannelName(channelName);
   }
 
   /**
@@ -596,10 +554,9 @@ class NucleusEngine {
    *
    * @returns {Promise<void>}
    */
-  async unsubscribeFromChannelName (channelName) {
-    await this.$eventSubscriberDatastore.$$server.unsubscribe(channelName);
+  async unsubscribeFromEventChannelByName (channelName) {
 
-    return Promise.resolve();
+    return this.$eventSubscriberDatastore.unsubscribeFromChannelName(channelName);
   }
 
   /**
@@ -672,29 +629,3 @@ class NucleusEngine {
 }
 
 module.exports = NucleusEngine;
-
-function handleRedisEvent (...argumentList) {
-  const { $engine } = this;
-
-  if (argumentList.length === 3) {
-    const channelPattern = arguments[0];
-    const channelName = arguments[1];
-    const data = arguments[2];
-
-    // NOTE: Implement handling of pattern channel
-  } else if (argumentList.length === 2) {
-    const channelName = arguments[0];
-    const data = arguments[1];
-
-    const parsedData = NucleusDatastore.parseItem(data);
-
-    if (parsedData.hasOwnProperty('name') && parsedData.hasOwnProperty('message')) {
-      const { meta, message, name } = parsedData;
-      const $event = new NucleusEvent(name, message, meta);
-
-      // NOTE: Should log any error thrown by the handler.
-      $engine.executeHandlerCallbackForChannelName(channelName, $event)
-        .catch($engine.$logger.error);
-    }
-  }
-}

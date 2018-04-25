@@ -14,13 +14,15 @@
 const Promise = require('bluebird');
 const redis = require('redis');
 
-const NucleusError = require('./Error.nucleus');
+const NucleusError = require('./Error.nucleus')
+const NucleusEvent = require('./Event.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
 
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
 
+const $$keyspaceNotificationChannelNameRegularExpression = new RegExp('__keyspace@[0-9]__:.*|__keyevent@[0-9]__:.*');
 const $$predicateRegularExpression = new RegExp('SOP\\:[A-Za-z0-9\\-]+\\:[A-Za-z0-9\\-]+\\:([A-Za-z0-9\\-]+)');
 
 class NucleusDatastore {
@@ -38,16 +40,25 @@ class NucleusDatastore {
    * @returns {Proxy}
    */
   constructor (datastoreName = 'Untitled', options = {}) {
-    const { index: datastoreIndex = 0, port: datastorePort = 6379, URL: datastoreURL = 'localhost' } = options;
+    const {
+      $logger = console,
+      index: datastoreIndex = 0,
+      port: datastorePort = 6379,
+      URL: datastoreURL = 'localhost'
+    } = options;
 
     this.name = datastoreName;
     this.index = datastoreIndex;
+
+    this.$$handlerCallbackListByChannelName = {};
 
     this.$$server = redis.createClient({
       db: datastoreIndex,
       host: datastoreURL,
       port: datastorePort
     });
+
+    this.$logger = $logger;
 
     this.$$promise = new Promise((resolve, reject) => {
       if (this.$$server.connectedAsync) resolve();
@@ -66,6 +77,9 @@ class NucleusDatastore {
         else undefined;
       }
     });
+
+    this.$$server.on('message', this.handleRedisEvent.bind(this));
+    this.$$server.on('pmessage', this.handleRedisEvent.bind(this));
 
     return $$proxy;
   }
@@ -248,6 +262,39 @@ class NucleusDatastore {
       .then(NucleusDatastore.parseItem);
   }
 
+
+  /**
+   * Executes all handler callback for a given channel name.
+   *
+   * @argument {String} channelName
+   * @argument {NucleusEvent} $event
+   *
+   * @returns {Promise}
+   */
+  executeHandlerCallbackForChannelName (channelName, $event) {
+    const $$handlerCallbackList = this.$$handlerCallbackListByChannelName[channelName];
+
+    if (nucleusValidator.isEmpty($$handlerCallbackList)) return Promise.resolve();
+
+    if ($$keyspaceNotificationChannelNameRegularExpression.test(channelName)) {
+      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, command: $event });
+
+      return Promise.all($$handlerCallbackList
+        .map(($$handlerCallback) => {
+
+          return Promise.resolve($$handlerCallback.call(this, channelName, $event));
+        }));
+    } else {
+      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, eventID: $event.ID, eventName: $event.name });
+
+      return Promise.all($$handlerCallbackList
+        .map(($$handlerCallback) => {
+
+          return Promise.resolve($$handlerCallback.call(this, $event));
+        }));
+    }
+  }
+
   /**
    * Verifies if an item is part of a given item set.
    *
@@ -270,6 +317,56 @@ class NucleusDatastore {
 
         return { isMember: !!isMemberCode };
       });
+  }
+
+  /**
+   * Handles event published to a specific channel given a handler callback.
+   *
+   * @argument {String} channelName
+   * @argument {Function} handlerCallback
+   *
+   * @returns {Promise<Object>}
+   */
+  handleEventByChannelName (channelName, handlerCallback) {
+    if (!this.$$handlerCallbackListByChannelName.hasOwnProperty(channelName)) this.$$handlerCallbackListByChannelName[channelName] = [];
+
+    this.$$handlerCallbackListByChannelName[channelName].push(handlerCallback);
+
+    return Promise.resolve({ channelName, handlerCallback });
+  }
+
+  /**
+   * Handles Redis event.
+   *
+   * @argument {String[]} argumentList
+   */
+  handleRedisEvent (...argumentList) {
+    if (argumentList.length === 3) {
+      const channelPattern = arguments[0];
+      const channelName = arguments[1];
+      const data = arguments[2];
+
+      // NOTE: Implement handling of pattern channel
+    } else if (argumentList.length === 2) {
+      const channelName = arguments[0];
+      const data = arguments[1];
+
+      if ($$keyspaceNotificationChannelNameRegularExpression.test(channelName)) {
+
+        this.executeHandlerCallbackForChannelName(channelName, data)
+          .catch(this.$logger.error);
+      } else {
+        const parsedData = NucleusDatastore.parseItem(data);
+
+        if (parsedData.hasOwnProperty('name') && parsedData.hasOwnProperty('message')) {
+          const { meta, message, name } = parsedData;
+          const $event = new NucleusEvent(name, message, meta);
+
+          this.executeHandlerCallbackForChannelName(channelName, $event)
+            .catch(this.$logger.error);
+        }
+      }
+    }
   }
 
   /**
@@ -432,6 +529,30 @@ class NucleusDatastore {
   retrieveVectorByIndexSchemeFromHexastore (itemName, indexingScheme, vectorA, vectorB) {
 
     return this.$$server.zrangebylexAsync(itemName, `[${indexingScheme}:${vectorA}:${vectorB}:`, `[${indexingScheme}:${vectorA}:${vectorB}:\xff`);
+  }
+
+  /**
+   * Subscribes the client to a channel given its name.
+   *
+   * @argument {String} channelName
+   *
+   * @returns {Promise}
+   */
+  subscribeToChannelName (channelName) {
+
+    return this.$$server.subscribeAsync(channelName);
+  }
+
+  /**
+   * Unsubscribes the client from a channel given its name.
+   *
+   * @argument {String} channelName
+   *
+   * @returns {Promise}
+   */
+  unsubscribeFromChannelName (channelName) {
+
+    return this.$$server.unsubscribeAsync(channelName);
   }
 
   /**

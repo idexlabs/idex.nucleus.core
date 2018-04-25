@@ -6,8 +6,6 @@ const NucleusEngine = require('./library/Engine.nucleus');
 const NucleusError = require('./library/Error.nucleus');
 const NucleusEvent = require('./library/Event.nucleus');
 
-console.log(process);
-
 module.exports = {
   NucleusAction,
   NucleusDatastore,

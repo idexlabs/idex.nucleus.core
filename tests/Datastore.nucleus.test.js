@@ -5,9 +5,11 @@ const chai = require('chai');
 const mocha = require('mocha');
 const uuid = require('node-uuid');
 const redis = require('redis');
+const sinon = require('sinon');
 
 const NucleusDatastore = require('../library/Datastore.nucleus');
 const NucleusError = require('../library/Error.nucleus');
+const NucleusEvent = require('../library/Event.nucleus');
 
 const DATASTORE_INDEX = 0;
 const DATASTORE_URL = 'localhost';
@@ -722,6 +724,113 @@ return { itemIDA, itemIDB, itemIDC }
           .then(({ relationshipList }) => {
             chai.expect(relationshipList).to.have.length(1);
             chai.expect(relationshipList[0]).to.equal(predicate);
+          });
+      });
+
+    });
+
+  });
+
+  mocha.suite("Events", function () {
+
+    mocha.teardown(function () {
+      const { $datastore } = this;
+
+      $datastore.$$handlerCallbackListByChannelName = {};
+    });
+
+    mocha.suite("#handleEventByChannelName", function () {
+
+      mocha.test("The handler callback is added.", async function () {
+        const { $datastore } = this;
+
+        const spy = sinon.spy(() => Promise.resolve());
+
+        await $datastore.handleEventByChannelName('DummyEvent', spy);
+
+        chai.expect($datastore.$$handlerCallbackListByChannelName, "The `DummyEvent` has been added.").to.have.property('DummyEvent');
+        chai.expect($datastore.$$handlerCallbackListByChannelName.DummyEvent, "One handler callback has been added.").to.have.length(1);
+        chai.expect($datastore.$$handlerCallbackListByChannelName.DummyEvent[0], "The spy handler has been added.").to.equal(spy);
+      });
+
+    });
+
+    mocha.suite("#executeHandlerCallbackForChannelName", function () {
+
+      mocha.suiteSetup(function () {
+        const { $datastore } = this;
+
+        const spyA = sinon.spy(() => Promise.resolve());
+        const spyB = sinon.spy(() => Promise.resolve());
+        const spyC = sinon.spy(() => Promise.resolve());
+
+        $datastore.$$handlerCallbackListByChannelName.DummyEvent = [ spyA, spyB, spyC ];
+      });
+
+      mocha.test("Every registered handler callback is executed given the channel name.", async function () {
+        const { $datastore } = this;
+
+        const [ spyA, spyB, spyC ] = $datastore.$$handlerCallbackListByChannelName.DummyEvent;
+
+        const $event = new NucleusEvent('ExecuteSimpleDummy', {});
+
+        await $datastore.executeHandlerCallbackForChannelName('DummyEvent', $event);
+
+        return new Promise((resolve, reject) => {
+          process.nextTick(function () {
+            try {
+              chai.expect(spyA.called, "The spy has been executed.").to.be.true;
+              chai.expect(spyB.called, "The spy has been executed.").to.be.true;
+              chai.expect(spyC.called, "The spy has been executed.").to.be.true;
+
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+      });
+
+    });
+
+    mocha.suite("@event", function () {
+
+      mocha.suiteSetup(function () {
+        const { $datastore } = this;
+
+        const $subscriberDatastore = $datastore.duplicateConnection();
+
+        const $$spy = sinon.spy(() => Promise.resolve());
+
+        Object.defineProperty(this, '$subscriberDatastore', {
+          value: $subscriberDatastore,
+          writable: false
+        });
+
+        return $subscriberDatastore.handleEventByChannelName('DummyEvent', $$spy);
+      });
+
+      mocha.suiteTeardown(function () {
+        const { $subscriberDatastore } = this;
+
+        Reflect.deleteProperty(this, '$subscriberDatastore');
+
+        return $subscriberDatastore.unsubscribeFromChannelName('DummyEvent');
+      });
+
+      mocha.test("Every registered handler callback is executed after an event is published to the channel.", async function () {
+        const { $datastore, $subscriberDatastore } = this;
+
+        const $$spy = $subscriberDatastore.$$handlerCallbackListByChannelName.DummyEvent[0];
+
+        const $event = new NucleusEvent('ExecuteSimpleDummy', {});
+
+        await $subscriberDatastore.subscribeToChannelName('DummyEvent');
+        await $datastore.$$server.publishAsync('DummyEvent', JSON.stringify($event));
+
+        return Promise.delay(0)
+          .then(() => {
+            chai.expect($$spy.called, "The handler callback has been called for the channel `DummyEvent`").to.be.true;
           });
       });
 
