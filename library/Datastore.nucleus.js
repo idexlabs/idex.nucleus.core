@@ -4,11 +4,6 @@
  * @fileOverview Define the Nucleus Datastore class that wraps a Redis client.
  *
  * @author Sebastien Filion
- *
- * @requires NPM:bluebird
- * @requires NPM:redis
- * @requires ./Error.nucleus
- * @requires ./validator.nucleus
  */
 
 const Promise = require('bluebird');

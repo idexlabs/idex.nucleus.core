@@ -4,9 +4,6 @@
  * @fileOverview Abstract various validation tools.
  *
  * @author Sebastien Filion
- *
- * @requires NPM:superstruct
- * @requires NPM:validator
  */
 
 const { struct } = require('superstruct');

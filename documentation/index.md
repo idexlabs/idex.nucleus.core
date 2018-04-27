@@ -1,6 +1,6 @@
 # Nucleus
 
-// Library microservice tool implemented in JavaScript for NodeJS.
+Nucleus is flexible library to implement a distributed micro-service(-like) architecture in NodeJS.  
 
 ## High level Nucleus architecture
 

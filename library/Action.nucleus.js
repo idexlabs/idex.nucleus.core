@@ -4,11 +4,6 @@
  * @fileOverview Define the Nucleus Action class that is used to create an action.
  *
  * @author Sebastien Filion
- *
- * @requires NPM:node-uuid
- * @requires ./Error.nucleus
- * @requires ./Resource.nucleus
- * @requires ./validator.nucleus
  */
 
 const NucleusError = require('./Error.nucleus');

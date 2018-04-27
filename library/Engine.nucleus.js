@@ -4,16 +4,6 @@
  * @fileOverview Define the Nucleus Engine class that is used to interface the action and event loop.
  *
  * @author Sebastien Filion
- *
- * @Nucleus HelloWorld Hello World!
- *
- * @requires NPM:bluebird
- * @requires NPM:node-uuid
- * @requires ./Action.nucleus
- * @requires ./Datastore.nucleus
- * @requires ./Error.nucleus
- * @requires ./Event.nucleus
- * @requires ./validator.nucleus
  */
 
 const Promise = require('bluebird');
@@ -167,7 +157,7 @@ class NucleusEngine {
             return accumulator;
           }, {});
 
-        const argumentConfigurationByArgumentName = doclet.params
+        const argumentConfigurationByArgumentName = (doclet.params || [])
           .reduce((accumulator, { name: argumentName, optional: argumentIsOptional, type: { names: argumentTypeList } }) => {
             const cleanedArgumentType = nucleusValidator.shiftFirstLetterToLowerCase(argumentTypeList.join('|')).replace($$complexDataTypeRegularExpression, "$1");
             accumulator[argumentName] = (!!argumentIsOptional) ? `${cleanedArgumentType}?` : cleanedArgumentType;
@@ -191,7 +181,7 @@ class NucleusEngine {
 
         return Promise.all([
           this.$datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName, actionConfiguration),
-          this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, this.defaultActionQueueName, actionName)
+          this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName, this.defaultActionQueueName)
         ]);
       }));
 
@@ -257,7 +247,7 @@ class NucleusEngine {
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
       await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
 
-      const { fileName = '', fileType = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
+      const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
 
       // 2. Validate the action message.
       const actionMessageArgumentList = Object.keys(actionMessage);
@@ -292,10 +282,10 @@ class NucleusEngine {
         }, []);
 
       // 3. Retrieve the execution context and method.
-      const $executionContext = this;
+      const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
       // 4. Execute action.
-      const actionResponse = await $executionContext[methodName].apply($executionContext, argumentList);
+      const actionResponse = await $executionContext[methodName].apply(((contextName === 'Self')) ? this : { $datastore: this.$datastore }, argumentList);
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);

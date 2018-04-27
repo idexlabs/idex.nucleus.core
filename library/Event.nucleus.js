@@ -4,10 +4,6 @@
  * @fileOverview Define the Nucleus Event class that is used to create an event.
  *
  * @author Sebastien Filion
- *
- * @requires ./Error.nucleus
- * @requires ./Resource.nucleus
- * @requires ./validator.nucleus
  */
 
 const NucleusError = require('./Error.nucleus');

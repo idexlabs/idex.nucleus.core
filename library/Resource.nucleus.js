@@ -4,10 +4,6 @@
  * @fileOverview Define the Nucleus Resource class that is used to create a resource.
  *
  * @author Sebastien Filion
- *
- * @requires NPM:node-uuid
- * @requires ./Error.nucleus
- * @requires ./validator.nucleus
  */
 
 const uuid = require('node-uuid');

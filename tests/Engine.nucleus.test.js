@@ -108,6 +108,7 @@ mocha.suite('Nucleus Engine', function () {
       const { $datastore } = this;
 
       await $datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummy', {
+        contextName: 'Self',
         methodName: 'executeSimpleDummy'
       });
 
@@ -117,6 +118,7 @@ mocha.suite('Nucleus Engine', function () {
           AID1: 'string',
           AID2: 'string'
         },
+        contextName: 'Self',
         methodName: 'executeSimpleDummyWithArguments'
       });
     });
@@ -320,6 +322,7 @@ mocha.suite('Nucleus Engine', function () {
 
   });
 
+  // NOTE: This test oddly fails when run along the others, seems like the datastore connection closes before getting here.
   mocha.suite("Autodiscovery", function () {
 
     mocha.test("Autodiscovery test", async function () {

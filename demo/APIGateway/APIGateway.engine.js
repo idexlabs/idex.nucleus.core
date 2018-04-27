@@ -18,11 +18,13 @@ class APIGatewayEngine extends NucleusEngine {
     this.$$application = express();
     this.$$httpServer = http.createServer(this.$$application);
 
+    // Once the engine is initialized...
     this.$$promise = this.$$promise
       .then(() => {
 
         return new Promise((resolve) => {
 
+          // HTTP server listens on the given port;
           this.$$httpServer.listen(HTTP_PORT, resolve);
         });
       })
@@ -31,17 +33,25 @@ class APIGatewayEngine extends NucleusEngine {
         this.$logger.info(`HTTP server is listening on port ${HTTP_PORT}.`);
       })
       .then(() => {
-        // GET /ping
-        this.$$application.get('/ping', async (request, response) => {
-          try {
-            const actionResponse = await this.publishActionByNameAndHandleResponse('Ping', {}, uuid.v4());
+        const routeList = [
+          [ 'GET', '/ping', 'Ping' ],
+          [ 'GET', '/ping/external', 'ExternalPing' ]
+        ];
 
-            response.status(200).send(actionResponse).end();
-          } catch (error) {
+        // Configure the endpoints manually for the demo.
+        routeList
+          .forEach(([ endpointVerb, endpointPath, actionName ]) => {
+            this.$$application[endpointVerb.toLowerCase()](endpointPath, async (request, response) => {
+              try {
+                const actionResponse = await this.publishActionByNameAndHandleResponse(actionName, {}, uuid.v4());
 
-            response.status(500).send(error).end();
-          }
-        });
+                response.status(200).send(actionResponse).end();
+              } catch (error) {
+
+                response.status(500).send(error).end();
+              }
+            });
+          });
       });
   }
 
