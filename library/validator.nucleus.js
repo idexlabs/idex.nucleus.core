@@ -29,9 +29,21 @@ const isEmpty = (value) => {
 };
 
 /**
+ * Validates that the value is a Function.
+ *
+ * @argument {Function|*} value
+ *
+ * @returns {boolean}
+ */
+const isFunction = (value)  => {
+
+  return typeof value === 'function';
+};
+
+/**
  * Validates that the value is a Number.
- value
- * @argument {Number} number
+ *
+ * @argument {Number|*} value
  *
  * @returns {Boolean}
  */
@@ -43,7 +55,7 @@ const isNumber = (value) => {
 /**
  * Validates that the value is an Object.
  *
- * @argument {Object} value
+ * @argument {Object|*} value
  *
  * @returns {Boolean}
  */
@@ -53,9 +65,22 @@ const isObject = (value) => {
 };
 
 /**
+ * Validates that the value is object-like; that it has the prototype of an object, that it is not an array and that the
+ * stringified primitive might have been modified.
+ *
+ * @argument {Object|*} value
+ *
+ * @returns {boolean}
+ */
+const isObjectLike = (value) => {
+
+  return !isArray(value) && Object.keys(value).length === Object.values(value).length;
+};
+
+/**
  * Validates that the value is a String.
  *
- * @argument {String} value
+ * @argument {String|*} value
  *
  * @returns {Boolean}
  */
@@ -67,7 +92,7 @@ const isString = (value) => {
 /**
  * Replaces the first letter to lower case.
  *
- * @argument {String} string
+ * @argument {String|*} string
  *
  * @returns {String}
  */
@@ -83,8 +108,10 @@ const shiftFirstLetterToLowerCase = (string) => {
 module.exports = {
   isArray,
   isEmpty,
+  isFunction,
   isNumber,
   isObject,
+  isObjectLike,
   isString,
   shiftFirstLetterToLowerCase,
   struct

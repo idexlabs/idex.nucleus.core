@@ -16,6 +16,7 @@ const NucleusAction = require('./Action.nucleus');
 const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
+const NucleusResourceRelationshipDatastore = require('./ResourceRelationshipDatastore.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
 
@@ -31,6 +32,10 @@ const PRODUCTION_ENVIRONMENT_NAME = 'production';
 const $$complexDataTypeRegularExpression = new RegExp(/([a-z]+)\.<[A-Za-z]+>/);
 const $$engineFileNameRegularExpression = new RegExp(/.*engine\.js$/);
 
+// NOTE: It seems like the system slows downs processing requests when there's a very high load (100+ requests under 25ms)
+// The issue is caused mostly by how the requests get parallelized,
+// One way to resolve this might be to create more redis connection on the fly.
+
 class NucleusEngine {
 
   /**
@@ -42,8 +47,10 @@ class NucleusEngine {
    * @argument {NucleusDatastore} [options.$actionDatastore]
    * @argument {NucleusDatastore} [options.$engineDatastore]
    * @argument {NucleusDatastore} [options.$eventDatastore]
+   * @argument {NucleusResourceRelationshipDatastore} [options.$resourceRelationshipDatastore]
    * @argument {NucleusDatastore} [options.$logger]
    * @argument {Boolean} [options.automaticallyAutodiscover=false]
+   * @argument {Boolean} [options.automaticallyManageResourceRelationship=false]
    * @argument {Boolean} [options.automaticallyRetrievePendingActions=false]
    * @argument {String} [options.defaultActionQueueName=<Engine's name>]
    *
@@ -54,8 +61,10 @@ class NucleusEngine {
       $actionDatastore = new NucleusDatastore(),
       $engineDatastore = new NucleusDatastore(),
       $eventDatastore = new NucleusDatastore(),
+      $resourceRelationshipDatastore = new NucleusResourceRelationshipDatastore(),
       $logger = console,
       automaticallyAutodiscover = false,
+      automaticallyManageResourceRelationship = false,
       automaticallyRetrievePendingActions = false,
       defaultActionQueueName = engineName
     } = options;
@@ -71,6 +80,8 @@ class NucleusEngine {
     this.$engineDatastore = this.$datastore = $engineDatastore;
     this.$eventDatastore = $eventDatastore;
     this.$eventSubscriberDatastore = this.$eventDatastore.duplicateConnection();
+
+    if (automaticallyManageResourceRelationship) this.$resourceRelationshipDatastore = $resourceRelationshipDatastore;
 
     this.$handlerDatastoreByName = {};
 
@@ -259,6 +270,7 @@ class NucleusEngine {
           return argumentNameList
             .reduce((accumulator, argumentName) => {
               if (argumentName === 'options') accumulator.push(argumentName);
+              if (argumentName === 'originUserID') accumulator.push(argumentName);
               else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
 
               return accumulator;
@@ -268,24 +280,37 @@ class NucleusEngine {
       if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing");
 
       if (!nucleusValidator.isEmpty(argumentConfigurationByArgumentName)) {
+        if (!argumentConfigurationByArgumentName.hasOwnProperty('originUserID')) argumentConfigurationByArgumentName.originUserID = 'string';
+
+        // User the argument configuration object to validate the action's message.
         const Signature = nucleusValidator.struct(argumentConfigurationByArgumentName);
 
-        Signature(actionMessage);
+        Signature(Object.assign({}, actionMessage, { originUserID: $action.originUserID }));
       }
 
       const argumentList = fulfilledActionSignature
         .reduce((accumulator, argumentName) => {
           if (argumentName === 'options') accumulator.push(actionMessage);
+          if (argumentName === 'originUserID') accumulator.push($action.originUserID);
           else accumulator.push(actionMessage[argumentName]);
 
           return accumulator;
         }, []);
 
-      // 3. Retrieve the execution context and method.
+      // 3. Retrieve the execution context of the method to execute.
       const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
       // 4. Execute action.
-      const actionResponse = await $executionContext[methodName].apply(((contextName === 'Self')) ? this : { $datastore: this.$datastore }, argumentList);
+      const actionResponse = await $executionContext[methodName].apply((
+        // If the action is part of the current engine, the context of the method to execute will be `this`...
+        (contextName === 'Self')) ?
+          this :
+          // If the action is part of an external API file, the context will be either:
+          // The local datastore or...
+          // The local datastore and a relationship datastore if available.
+          (this.$resourceRelationshipDatastore) ?
+            { $datastore: this.$datastore, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore } :
+            { $datastore: this.$datastore }, argumentList);
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);
@@ -612,6 +637,8 @@ class NucleusEngine {
    * @returns {String}
    */
   static retrieveModuleDirectoryPath (moduleName, moduleNode = module.parent) {
+    if (nucleusValidator.isEmpty(moduleNode)) throw new NucleusError.UndefinedContextNucleusError(`Could not find any engine for the module "${moduleName}".`);
+
     if (!new RegExp(`.*${moduleName}.*`).test(moduleNode.filename)) return NucleusEngine.retrieveModuleDirectoryPath(moduleName, moduleNode.parent);
     else return path.dirname(moduleNode.filename);
   }

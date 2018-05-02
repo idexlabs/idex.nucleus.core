@@ -27,6 +27,13 @@ const NucleusActionStatusWeightList = [
   CompletedActionStatus
 ];
 
+const actionResourceStructure = {
+  finalMessage: 'object?',
+  name: 'string',
+  originalMessage: 'object',
+  status: 'string?'
+};
+
 /**
  * @module NucleusAction
  * @typedef NucleusAction
@@ -42,7 +49,7 @@ const NucleusActionStatusWeightList = [
  * @property {String} name
  * @property {Object} originalMessage
  * @property {String} originUserID
- * @property {String} status
+ * @property {String} [status]
  */
 
 class NucleusAction extends NucleusResource {
@@ -71,7 +78,7 @@ class NucleusAction extends NucleusResource {
     if (arguments.length === 1 && nucleusValidator.isObject(arguments[0])) {
       const action = arguments[0];
 
-      super('NucleusAction', action);
+      super('NucleusAction', actionResourceStructure, action);
 
       Reflect.defineProperty(this, 'name', { writable: false });
 
@@ -87,24 +94,24 @@ class NucleusAction extends NucleusResource {
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 
-      super('NucleusAction', { originEngineID, originEngineName, originProcessID }, originUserID);
+      super('NucleusAction', actionResourceStructure, { name: actionName, originalMessage: actionMessage }, { originEngineID, originEngineName, originProcessID }, originUserID);
 
       /** @member {String} name */
-      Reflect.defineProperty(this, 'name', { value: actionName, writable: false });
+      Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });
 
       /** @member {Object} originalMessage */
       Reflect.defineProperty(this, 'originalMessage', {
-        value: Object.assign(NucleusAction.generateAttributeProxy(), actionMessage),
+        value: Object.assign(NucleusAction.generateAttributeProxy(), this.originalMessage),
         writable: false
       });
-
-      Object.freeze(this.originalMessage);
 
       /** @member {String} originUserID */
       this.originUserID = originUserID;
 
       this.finalMessage = undefined;
       this.status = undefined;
+
+      Object.freeze(this.originalMessage);
     }
 
     // Reflect.preventExtensions(this);
@@ -116,6 +123,11 @@ class NucleusAction extends NucleusResource {
     if (primitiveType === 'string') return `NucleusAction:${this.name}:${this.ID}`;
     // If forced to a Number, it will return the status weight.
     if (primitiveType === 'number') return NucleusActionStatusWeightList.indexOf(this.status);
+  }
+
+  generateOwnItemKey () {
+
+    return NucleusResource.generateItemKey(this.type, this.name, this.ID);
   }
 
   /**

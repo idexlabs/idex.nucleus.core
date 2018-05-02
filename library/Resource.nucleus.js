@@ -12,6 +12,9 @@ const NucleusError = require('./Error.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
 
+// NOTE: The NucleusResource class should accept a struc, it would help evaluate if an Resource-like object is correctly
+// formed before trying to instantiate it.
+
 /**
  * @module NucleusResource
  * @typedef NucleusResource
@@ -21,7 +24,6 @@ const nucleusValidator = require('./validator.nucleus');
  * @property {String} [meta.modifiedISOTime]
  * @property {String} [meta.originUserID]
  */
-
 class NucleusResource {
 
   /**
@@ -35,19 +37,20 @@ class NucleusResource {
    *
    * @returns {NucleusResource}
    */
-  constructor (resourceType = 'Undefined', resourceMeta = {}, originUserID = 'Unknown') {
-    if (arguments.length === 2 && (nucleusValidator.isObject(arguments[1]))) {
-      Object.assign(this, arguments[1]);
+  constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, resourceMeta = {}, authorUserID = 'Unknown') {
+    if (arguments.length === 3 && (nucleusValidator.isObject(arguments[2]))) {
+      Object.assign(this, arguments[2]);
 
-      Reflect.defineProperty(this, 'ID', { writable: false });
+      Reflect.defineProperty(this, 'ID', { enumerable: true, writable: false });
 
-      Reflect.defineProperty(this, 'type', { value: resourceType, writable: false });
+      Reflect.defineProperty(this, 'type', { enumerable: true, value: resourceType, writable: false });
 
       Reflect.defineProperty(this, 'meta', {
-        value: Object.assign(NucleusResource.generateAttributeProxy(), this.meta, {
+        enumerable: true,
+        value: Object.assign(NucleusResource.generateAttributeProxy(), resourceMeta, {
           [Symbol.toPrimitive] () {
 
-            return `${resourceType} created on ${this.createdISOTime} by ${this.originUserID}.`;
+            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID}.`;
           }
         }),
         writable: true
@@ -55,26 +58,28 @@ class NucleusResource {
 
     } else {
       /** @member {String} ID */
-      Reflect.defineProperty(this, 'ID', { value: uuid.v1(), writable: false });
+      Reflect.defineProperty(this, 'ID', { enumerable: true, value: uuid.v1(), writable: false });
 
       /** @member {String} ID */
-      Reflect.defineProperty(this, 'type', { value: resourceType, writable: false });
+      Reflect.defineProperty(this, 'type', { enumerable: true, value: resourceType, writable: false });
 
       /** @member {Object} meta */
       Reflect.defineProperty(this, 'meta', {
+        enumerable: true,
         value: Object.assign(NucleusResource.generateAttributeProxy(), resourceMeta, {
           createdISOTime: new Date().toISOString(),
-          originUserID,
+          authorUserID,
           [Symbol.toPrimitive] () {
 
-            return `${resourceType} created on ${this.createdISOTime} by ${this.originUserID}.`;
+            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID}.`;
           }
         }),
         writable: true
       });
 
-      /** @member {String} originUserID */
-      this.originUserID = originUserID;
+      new nucleusValidator.struct(resourceStructure)(resourceAttributes);
+
+      Object.assign(this, resourceAttributes);
     }
   }
 
@@ -90,12 +95,12 @@ class NucleusResource {
 
   generateOwnItemKey () {
 
-    return NucleusResource.generateItemKey(this.type, this.ID, this.name);
+    return NucleusResource.generateItemKey(this.type, this.ID);
   }
 
-  static generateItemKey (resourceType, resourceID, resourceName) {
+  static generateItemKey (...attributeList) {
 
-    return `${resourceType}:${resourceName}:${resourceID}`;
+    return attributeList.join(':');
   }
 
   /**

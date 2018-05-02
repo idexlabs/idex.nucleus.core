@@ -46,7 +46,7 @@ mocha.suite('Nucleus Event', function () {
 
   });
 
-  mocha.test("The events's meta is converted to a convenience string if forced to string.", function () {
+  mocha.test("The event's meta is converted to a convenience string if forced to string.", function () {
     const eventName = 'DummyEvent';
     const eventMessage = { EID: uuid.v1() };
 

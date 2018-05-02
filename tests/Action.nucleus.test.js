@@ -55,7 +55,7 @@ mocha.suite('Nucleus Action', function () {
       const $action = new NucleusAction(actionName, actionMessage);
       const actionMetaPrimitive = `${$action.meta}`;
 
-      chai.expect(actionMetaPrimitive).to.equal(`NucleusAction created on ${$action.meta.createdISOTime} by ${$action.meta.originUserID}.`);
+      chai.expect(actionMetaPrimitive).to.equal(`NucleusAction created on ${$action.meta.createdISOTime} by ${$action.meta.authorUserID}.`);
     });
 
     mocha.test("The action's meta has a `toString` method that converts the meta object to a JSON string.", function () {

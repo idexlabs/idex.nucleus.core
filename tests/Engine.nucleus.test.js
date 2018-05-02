@@ -67,11 +67,11 @@ mocha.suite('Nucleus Engine', function () {
       $eventDatastore
     });
 
-    Object.defineProperty(this, '$datastore', {
+    Reflect.defineProperty(this, '$datastore', {
       value: $datastore,
       writable: false
     });
-    Object.defineProperty(this, '$engine', {
+    Reflect.defineProperty(this, '$engine', {
       value: $engine,
       writable: false
     });
@@ -100,6 +100,12 @@ mocha.suite('Nucleus Engine', function () {
     const { $datastore } = this;
 
     return $datastore.$$server.flushallAsync();
+  });
+
+  mocha.suiteTeardown(function () {
+    const { $datastore } = this;
+
+    return $datastore.destroy();
   });
 
   mocha.suite("Actions", function () {

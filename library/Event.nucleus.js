@@ -11,6 +11,11 @@ const NucleusResource = require('./Resource.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
 
+const eventResourceStructure = {
+  name: 'string',
+  message: 'object'
+};
+
 /**
  * @module NucleusEvent
  * @typedef NucleusEvent
@@ -47,22 +52,30 @@ class NucleusEvent extends NucleusResource {
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 
-      super('NucleusEvent', { originEngineID, originEngineName, originProcessID }, originUserID);
+      super('NucleusEvent', eventResourceStructure, { name: eventName, message: eventMessage }, { originEngineID, originEngineName, originProcessID }, originUserID);
 
       /** @member {String} name */
-      Reflect.defineProperty(this, 'name', { value: eventName, writable: false, enumerable: true });
+      Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });
 
       /** @member {Object} message */
       Reflect.defineProperty(this, 'message', {
-        value: Object.assign(NucleusEvent.generateAttributeProxy(), eventMessage),
-        writable: false,
-        enumerable: true
+        enumerable: true,
+        value: Object.assign(NucleusEvent.generateAttributeProxy(), this.message),
+        writable: false
       });
+
+      /** @member {String} originUserID */
+      this.originUserID = originUserID;
 
       Object.freeze(this.message);
     }
 
     Reflect.preventExtensions(this);
+  }
+
+  generateOwnItemKey () {
+
+    return NucleusResource.generateItemKey(this.type, this.name, this.ID);
   }
 
 }

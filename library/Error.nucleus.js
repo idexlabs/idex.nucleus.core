@@ -62,6 +62,22 @@ class NucleusError extends Error {
 
 }
 
+class UnauthorizedActionNucleusError extends NucleusError {
+
+  /**
+   * Creates a Undefined Context Nucleus Error.
+   * @memberOf NucleusError
+   *
+   * @argument {String} errorMessage
+   */
+  constructor (errorMessage) {
+    super(errorMessage);
+
+    this.name = 'UnauthorizedActionNucleusError';
+    this.errorCode = 605;
+  }
+}
+
 class UndefinedContextNucleusError extends NucleusError {
 
   /**
@@ -129,6 +145,7 @@ class UnexpectedValueTypeNucleusError extends NucleusError {
 
 }
 
+NucleusError.UnauthorizedActionNucleusError = UnauthorizedActionNucleusError;
 NucleusError.UndefinedContextNucleusError = UndefinedContextNucleusError;
 NucleusError.UndefinedValueNucleusError = UndefinedValueNucleusError;
 NucleusError.UnexpectedValueNucleusError = UnexpectedValueNucleusError;

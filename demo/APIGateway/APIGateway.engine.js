@@ -35,7 +35,8 @@ class APIGatewayEngine extends NucleusEngine {
       .then(() => {
         const routeList = [
           [ 'GET', '/ping', 'Ping' ],
-          [ 'GET', '/ping/external', 'ExternalPing' ]
+          [ 'GET', '/ping/external', 'ExternalPing' ],
+          [ 'POST', '/dummy', 'CreateDummy' ]
         ];
 
         // Configure the endpoints manually for the demo.
@@ -43,7 +44,7 @@ class APIGatewayEngine extends NucleusEngine {
           .forEach(([ endpointVerb, endpointPath, actionName ]) => {
             this.$$application[endpointVerb.toLowerCase()](endpointPath, async (request, response) => {
               try {
-                const actionResponse = await this.publishActionByNameAndHandleResponse(actionName, {}, uuid.v4());
+                const actionResponse = await this.publishActionByNameAndHandleResponse(actionName, { dummy: { name: 'Dummy' } }, uuid.v4());
 
                 response.status(200).send(actionResponse).end();
               } catch (error) {

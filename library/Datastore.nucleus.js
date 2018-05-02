@@ -96,6 +96,15 @@ class NucleusDatastore {
   addItemToHashFieldByName (itemKey, ...hashList) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
 
+    if (hashList.length === 1 && nucleusValidator.isArray(hashList[0])) hashList = hashList[0];
+    else if (hashList.length === 1 && nucleusValidator.isObjectLike(hashList[0])) hashList = Reflect.ownKeys(hashList[0])
+      .reduce((accumulator, property) => {
+        accumulator.push(property);
+        accumulator.push(hashList[0][property]);
+
+        return accumulator;
+      }, []);
+
     if (hashList.length === 2) {
       const [ itemField, item ] = hashList;
 
@@ -365,6 +374,75 @@ class NucleusDatastore {
   }
 
   /**
+   * Removes a triple from a hexastore given the subject vector.
+   * This will remove every relationship where the given vector is subject or object.
+   *
+   * @argument {String} itemKey
+   * @argument {String} vector
+   *
+   * @returns {Promise<void>}
+   *
+   * @throws Will throw an error if the item key is missing or an empty string.
+   * @throws Will throw an error if the vector is not a string.
+   */
+  removeAllTriplesFromHexastoreByVector (itemKey, vector) {
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(vector)) throw new NucleusError.UnexpectedValueTypeNucleusError("The vector must be a string.");
+
+    return this.$$server.evaluateLUAScript(`
+local itemKey = ARGV[1]
+local vector = ARGV[2]
+
+-- Retrieve all the tripple where the item is the subject.
+local SPOTrippleList = redis.call('ZRANGEBYLEX', itemKey, '[SPO:'.. vector ..':', '[SPO:'.. vector ..'\xff')
+-- Retrieve all the tripple where the item is the object.
+local OPSTrippleList = redis.call('ZRANGEBYLEX', itemKey, '[OPS:'.. vector ..':', '[OPS:'.. vector ..'\xff')
+
+-- Splits a tripple into a table
+function splitTripple (tripple)
+    local splittedTripple = {}
+    local index = 1
+    for vector in string.gmatch(tripple, "([^:]+)") do
+        splittedTripple[index] = vector
+        index = index + 1
+    end
+
+    return splittedTripple
+end
+
+-- Removes a tripple
+function removeTripple (itemKey, subject, predicate, object)
+    redis.call('ZREM', itemKey, 'SPO'..subject..':'..predicate..':'..object)
+    redis.call('ZREM', itemKey, 'SOP'..subject..':'..object..':'..predicate)
+    redis.call('ZREM', itemKey, 'OPS'..object..':'..predicate..':'..subject)
+    redis.call('ZREM', itemKey, 'OSP'..object..':'..subject..':'..predicate)
+    redis.call('ZREM', itemKey, 'PSO'..predicate..':'..subject..':'..object)
+    redis.call('ZREM', itemKey, 'POS'..predicate..':'..object..':'..subject)
+end
+
+for tripple in SPOTrippleList do
+
+    local splittedTripple = splitTripple(tripple)
+    local subject = vector
+    local predicate = splittedTripple[3]
+    local object = splittedTripple[4]
+
+    removeTripple(itemKey, subject, predicate, object)
+end
+
+for tripple in OPSTrippleList do
+
+    local splittedTripple = splitTripple(tripple)
+    local subject = splittedTripple[4]
+    local predicate = splittedTripple[3]
+    local object = vector
+
+    removeTripple(itemKey, subject, predicate, object)
+end
+    `, itemKey, vector);
+  }
+
+  /**
    * Removes an item given its key. `DEL key`
    *
    * @argument {String} itemKey
@@ -399,6 +477,15 @@ class NucleusDatastore {
       .return(null);
   }
 
+  /**
+   * Retrieves all the items from a hash given its name. `HGETALL key`
+   *
+   * @argument itemKey
+   *
+   * @returns {Promise<Array>}
+   *
+   * @throws Will throw an error if the item key is missing or an empty string.
+   */
   retrieveAllItemsFromHashByName (itemKey) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
 
@@ -496,12 +583,7 @@ class NucleusDatastore {
   retrieveRelationshipListFromHexastore (itemName, subject, object) {
 
     return this.retrieveVectorByIndexSchemeFromHexastore(itemName, 'SOP', subject, object)
-      .then((memberList) => {
-        const relationshipList = memberList
-          .map((member) => {
-
-            return member.match($$predicateRegularExpression)[1];
-          });
+      .then((relationshipList) => {
 
         return { relationshipList };
       });
@@ -523,7 +605,16 @@ class NucleusDatastore {
    */
   retrieveVectorByIndexSchemeFromHexastore (itemName, indexingScheme, vectorA, vectorB) {
 
-    return this.$$server.zrangebylexAsync(itemName, `[${indexingScheme}:${vectorA}:${vectorB}:`, `[${indexingScheme}:${vectorA}:${vectorB}:\xff`);
+    return this.$$server.zrangebylexAsync(itemName, `[${indexingScheme}:${vectorA}:${vectorB}:`, `[${indexingScheme}:${vectorA}:${vectorB}:\xff`)
+      .then((itemList = []) => {
+
+        return itemList
+          .map((item) => {
+            const [ indexScheme, vectorA, vectorB, vectorC ] = item.split(':');
+
+            return vectorC;
+          });
+      });
   }
 
   /**

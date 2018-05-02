@@ -20,6 +20,13 @@ const { NucleusEngine } = require('Nucleus');
 // Create an Engine that registers the Ping action.
 class DummyEngine extends NucleusEngine {
   
+  constructor () {
+    super('Dummy', {
+      automaticallyAutodiscover: true,
+      automaticallyRetrievePendingActions: true
+    });
+  }
+  
   // Register the `ping` method as the "Ping" action handler using the `@Nucleus ActionName` tag.
   /**
   * Pings
