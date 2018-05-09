@@ -8,10 +8,9 @@ coverage/
 journal/
 node_modules/
 
-npm-debug.log
-
 *.db
 *.iml
+*.log
 *.rdb
 *.zip
 

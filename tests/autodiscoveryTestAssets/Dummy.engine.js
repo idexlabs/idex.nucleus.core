@@ -1,8 +1,8 @@
 "use strict";
 
-const uuid = require('node-uuid');
+const uuid = require('uuid');
 
-const NucleusEngine = require('../library/Engine.nucleus');
+const NucleusEngine = require('../../library/Engine.nucleus');
 
 class DummyEngine extends NucleusEngine {
 

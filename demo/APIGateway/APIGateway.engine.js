@@ -2,7 +2,7 @@
 
 const express = require('express');
 const http = require('http');
-const uuid = require('node-uuid');
+const uuid = require('uuid');
 
 const { NucleusEngine } = require('../../');
 

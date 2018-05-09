@@ -6,14 +6,11 @@
  * @author Sebastien Filion
  */
 
-const uuid = require('node-uuid');
+const uuid = require('uuid');
 
 const NucleusError = require('./Error.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
-
-// NOTE: The NucleusResource class should accept a struc, it would help evaluate if an Resource-like object is correctly
-// formed before trying to instantiate it.
 
 /**
  * @module NucleusResource
@@ -32,14 +29,18 @@ class NucleusResource {
    * const $resource = new NucleusResource();
    *
    * @argument {String} resourceType
-   * @argument {String} resourceMeta
-   * @argument {String} originUserID
+   * @argument {Object resourceStructure
+   * @argument {Object} resourceAttributes
+   * @argument {Object} resourceMeta
+   * @argument {String} authorUserID
    *
    * @returns {NucleusResource}
    */
-  constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, resourceMeta = {}, authorUserID = 'Unknown') {
-    if (arguments.length === 3 && (nucleusValidator.isObject(arguments[2]))) {
-      Object.assign(this, arguments[2]);
+  constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, authorUserID) {
+    // resourceAttributes, resourceMeta = {}, authorUserID = 'Unknown'
+
+    if (nucleusValidator.isString(resourceAttributes.ID) && nucleusValidator.isObject(resourceAttributes.meta)) {
+      Object.assign(this, resourceAttributes);
 
       Reflect.defineProperty(this, 'ID', { enumerable: true, writable: false });
 
@@ -47,16 +48,20 @@ class NucleusResource {
 
       Reflect.defineProperty(this, 'meta', {
         enumerable: true,
-        value: Object.assign(NucleusResource.generateAttributeProxy(), resourceMeta, {
+        value: Object.assign(NucleusResource.generateAttributeProxy(), (resourceAttributes.meta || {}), {
           [Symbol.toPrimitive] () {
 
-            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID}.`;
+            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID || this.originUserID}.`;
           }
         }),
         writable: true
       });
 
     } else {
+      const resourceMeta = resourceAttributes.meta || {};
+
+      Reflect.deleteProperty(resourceAttributes, 'meta');
+
       /** @member {String} ID */
       Reflect.defineProperty(this, 'ID', { enumerable: true, value: uuid.v1(), writable: false });
 
@@ -71,7 +76,7 @@ class NucleusResource {
           authorUserID,
           [Symbol.toPrimitive] () {
 
-            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID}.`;
+            return `${resourceType} created on ${this.createdISOTime} by ${this.authorUserID || this.originUserID}.`;
           }
         }),
         writable: true

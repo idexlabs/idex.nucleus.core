@@ -94,7 +94,7 @@ class NucleusAction extends NucleusResource {
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 
-      super('NucleusAction', actionResourceStructure, { name: actionName, originalMessage: actionMessage }, { originEngineID, originEngineName, originProcessID }, originUserID);
+      super('NucleusAction', actionResourceStructure, { meta: { originEngineID, originEngineName, originProcessID }, name: actionName, originalMessage: actionMessage }, originUserID);
 
       /** @member {String} name */
       Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });

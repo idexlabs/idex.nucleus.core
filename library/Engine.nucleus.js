@@ -8,8 +8,8 @@
 
 const Promise = require('bluebird');
 const childProcess = require('child_process');
-const JSDocParser = require.resolve('jsdoc/jsdoc.js');
-const uuid = require('node-uuid');
+const JSDocParserPath = require.resolve('jsdoc/jsdoc.js');
+const uuid = require('uuid');
 const path = require('path');
 
 const NucleusAction = require('./Action.nucleus');
@@ -20,9 +20,11 @@ const NucleusResourceRelationshipDatastore = require('./ResourceRelationshipData
 
 const nucleusValidator = require('./validator.nucleus');
 
-const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
-const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
-const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
+const ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME = 'ActionConfigurationByActionName';
+const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME = 'ActionQueueNameByActionName';
+const ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME = 'ActionQueueNameSet';
+const EXTENDABLE_ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME = 'ExtendableActionConfigurationByActionName';
+const RESOURCE_STRUCTURE_BY_RESOURCE_TYPE_TABLE_NAME = 'ResourceStructureByResourceType';
 
 const NODE_ENVIRONMENT = process.env.NODE_ENV || 'development';
 const DEVELOPMENT_ENVIRONMENT_NAME = 'development';
@@ -61,7 +63,7 @@ class NucleusEngine {
       $actionDatastore = new NucleusDatastore(),
       $engineDatastore = new NucleusDatastore(),
       $eventDatastore = new NucleusDatastore(),
-      $resourceRelationshipDatastore = new NucleusResourceRelationshipDatastore(),
+      $resourceRelationshipDatastore = new NucleusResourceRelationshipDatastore($engineDatastore),
       $logger = console,
       automaticallyAutodiscover = false,
       automaticallyManageResourceRelationship = false,
@@ -95,7 +97,7 @@ class NucleusEngine {
     // Execute everything needed during the initialization phase of the engine.
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
       .then(this.verifyRedisConfiguration.bind(this))
-      .then(() => { return this.$datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME, this.defaultActionQueueName); })
+      .then(() => { return this.$datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName); })
       .then(() => { if (automaticallyAutodiscover) return this.autodiscover(); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
       .then(() => {
@@ -118,55 +120,29 @@ class NucleusEngine {
   /**
    * Autodiscovers the module's actions.
    *
-   * @returns {Promise<{actionConfigurationList: Object}>}
+   * @returns {Promise<{ actionConfigurationList: actionConfiguration[], extendableActionConfigurationList: extendableActionConfiguration[], resourceStructureList: resourceStructure[] }>}
    */
-  async autodiscover () {
-    const engineDirectoryPath = NucleusEngine.retrieveModuleDirectoryPath(this.name);
+  async autodiscover (engineDirectoryPath = NucleusEngine.retrieveModuleDirectoryPath(this.name)) {
+
     // Retrieve all of the modules doclets using the JSDoc parser.
-    const docletList = await new Promise((resolve, reject) => {
-      const chunkList = [];
-      const $$childProcess = childProcess.spawn(JSDocParser, [ '-X', '-r', engineDirectoryPath ], { cwd: process.cwd() });
-
-      $$childProcess.stdout.setEncoding('utf8');
-      $$childProcess.stderr.setEncoding('utf8');
-
-      $$childProcess.stdout.on('data', chunkList.push.bind(chunkList));
-      $$childProcess.stderr.on('data', reject);
-
-      $$childProcess.on('close', () => {
-        const docletList = JSON.parse(chunkList.join(""));
-
-        resolve(docletList);
-      });
-      $$childProcess.on('error', reject);
-    });
+    const engineDocletList = await retrieveAllDocletsInPath(engineDirectoryPath);
+    const resourceAPIDocletList = await retrieveAllDocletsInPath(path.join(__dirname, '/ResourceAPI.nucleus.js'));
 
     // Filter out doclets that does not have a "Nucleus" tag.
-    const filteredDocletList = docletList
+    const filteredDocletList = [].concat(engineDocletList, resourceAPIDocletList)
       .filter((doclet) => {
 
         return (nucleusValidator.isArray(doclet.tags)) ? doclet.tags[0].title === 'nucleus' : false;
       });
 
     // Collect all relevant data from the filtered doclet.
-    const actionConfigurationList = filteredDocletList
+    const actionLikeConfigurationList = filteredDocletList
       .filter(({ kind }) => {
 
         return kind === 'function';
       })
       .map((doclet) => {
-        const nucleusTagsByName = doclet.tags
-          .reduce((accumulator, { value }) => {
-            const [ nucleusTagName, ...nucleusTagOptionList ] = value.split(" ");
-
-            accumulator[nucleusValidator.shiftFirstLetterToLowerCase(nucleusTagName)] = (
-              (nucleusTagOptionList.length === 1) ?
-              nucleusTagOptionList[0] :
-              nucleusTagOptionList
-            );
-
-            return accumulator;
-          }, {});
+        const nucleusTagsByName = parseNucleusTag(doclet.tags);
 
         const argumentConfigurationByArgumentName = (doclet.params || [])
           .reduce((accumulator, { name: argumentName, optional: argumentIsOptional, type: { names: argumentTypeList } }) => {
@@ -186,28 +162,50 @@ class NucleusEngine {
         }, nucleusTagsByName);
       });
 
-    await Promise.all(actionConfigurationList
-      .map((actionConfiguration) => {
-        const { actionName } = actionConfiguration;
+    const actionConfigurationList = actionLikeConfigurationList
+      .filter(({ extendableActionName }) => {
 
-        return Promise.all([
-          this.$datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName, actionConfiguration),
-          this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName, this.defaultActionQueueName)
-        ]);
-      }));
+        return !extendableActionName;
+      });
 
-    /**
-     * @namespace {Object} actionConfiguration
-     * @property {String} [actionEvent]
-     * @property {String} actionName
-     * @property {String[]} [alternativeActionSignature]
-     * @property {String[]} [actionSignature]
-     * @property {String} contextName=Self
-     * @property {String} fileName
-     * @property {String} filePath
-     * @property {String} methodName
-     */
-    return { actionConfigurationList };
+    const extendableActionConfigurationList = actionLikeConfigurationList
+      .filter(({ extendableActionName }) => {
+
+        return !!extendableActionName;
+      });
+
+    const resourceStructureList = filteredDocletList
+      .filter(({ kind }) => {
+
+        return kind === 'typedef';
+      })
+      .map((doclet) => {
+        const nucleusTagsByName = parseNucleusTag(doclet.tags);
+
+        const propertiesByArgumentName = (doclet.properties || [])
+          .reduce((accumulator, { name: argumentName, optional: argumentIsOptional, type: { names: argumentTypeList } }) => {
+            const cleanedArgumentType = nucleusValidator.shiftFirstLetterToLowerCase(argumentTypeList.join('|')).replace($$complexDataTypeRegularExpression, "$1");
+            accumulator[argumentName] = (!!argumentIsOptional) ? `${cleanedArgumentType}?` : cleanedArgumentType;
+
+            return accumulator;
+          }, {});
+
+        return Object.assign({
+          resourceType: doclet.name,
+          propertiesByArgumentName,
+          contextName: (doclet.memberof === `${this.name}Engine`) ? 'Self' : doclet.memberof || `${doclet.name}API`,
+          fileName: doclet.meta.filename,
+          filePath: path.join(doclet.meta.path, doclet.meta.filename),
+        }, nucleusTagsByName);
+      });
+
+    await this.storeActionConfiguration(actionConfigurationList);
+
+    await this.storeExtendableActionConfiguration(extendableActionConfigurationList);
+
+    await this.storeResourceStructure(resourceStructureList);
+
+    return { actionConfigurationList, extendableActionConfigurationList, resourceStructureList };
   }
 
   /**
@@ -249,7 +247,7 @@ class NucleusEngine {
 
     try {
       // 1. Retrieve the action configuration.
-      const actionConfiguration = await this.$datastore.retrieveItemFromHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, actionName);
+      const actionConfiguration = await this.$datastore.retrieveItemFromHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName);
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
@@ -264,8 +262,8 @@ class NucleusEngine {
       const actionMessageArgumentList = Object.keys(actionMessage);
 
       // Make sure that the message meets one of the proposed signature criteria.
-      const fulfilledActionSignature = [ actionSignature ]
-        .filter((argumentNameList) => {
+      const fulfilledActionSignature = [ actionSignature, actionAlternativeSignatureList ]
+        .filter((argumentNameList = []) => {
 
           return argumentNameList
             .reduce((accumulator, argumentName) => {
@@ -358,7 +356,7 @@ class NucleusEngine {
     if (!($action instanceof NucleusAction)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action is not a valid Nucleus action.");
     const { ID: actionID, name: actionName } = $action;
 
-    const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ACTION_QUEUE_NAME_SET_ITEM_NAME, actionQueueName);
+    const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, actionQueueName);
 
     if (!actionQueueNameRegistered) throw new NucleusError.UndefinedContextNucleusError(`The action queue name ${actionQueueName} doesn't exist or has not been properly registered.`);
 
@@ -399,7 +397,7 @@ class NucleusEngine {
     if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
 
-    const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, actionName);
+    const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName);
 
     const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
@@ -517,6 +515,102 @@ class NucleusEngine {
     } catch (error) {
       this.$logger.warn(`In progress: ${error}`);
     }
+  }
+
+  /**
+   * Stores an action configuration.
+   *
+   * @argument {String} defaultActionQueueName
+   * @argument {actionConfiguration} actionConfiguration
+   *
+   * @returns {Promise}
+   */
+  storeActionConfiguration (actionConfiguration) {
+    /**
+     * @typedef {Object} actionConfiguration
+     * @property {String} actionName
+     * @property {String[]} [alternativeActionSignature]
+     * @property {String[]} [actionSignature]
+     * @property {Object} [argumentConfigurationByArgumentName]
+     * @property {String} contextName=Self
+     * @property {String} [eventName]
+     * @property {String} fileName
+     * @property {String} filePath
+     * @property {String} methodName
+     */
+    if (nucleusValidator.isArray(actionConfiguration)) {
+      const actionConfigurationList = actionConfiguration;
+
+      return Promise.all(actionConfigurationList.map(this.storeActionConfiguration.bind(this)));
+    }
+
+    const { actionName } = actionConfiguration;
+
+    return Promise.all([
+      this.$datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName, actionConfiguration),
+      this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName, this.defaultActionQueueName)
+    ]);
+  }
+
+  /**
+   * Stores an extendable action configuration.
+   *
+   * @argument {extendableActionConfiguration} extendableActionConfiguration
+   *
+   * @returns {Promise}
+   */
+  storeExtendableActionConfiguration (extendableActionConfiguration) {
+    /**
+     * @typedef {Object} extendableActionConfiguration
+     * @property {String} actionName
+     * @property {String[]} [alternativeActionSignature]
+     * @property {String[]} [actionSignature]
+     * @property {Object} [argumentConfigurationByArgumentName]
+     * @property {String[]} [extendableAlternativeActionSignature]
+     * @property {String} extendableActionName
+     * @property {String} [extendableEventName]
+     * @property {String} contextName=Self
+     * @property {String} fileName
+     * @property {String} filePath
+     * @property {String} methodName
+     */
+    if (nucleusValidator.isArray(extendableActionConfiguration)) {
+      const extendableActionConfigurationList = extendableActionConfiguration;
+
+      return Promise.all(extendableActionConfigurationList.map(this.storeExtendableActionConfiguration.bind(this)));
+    }
+
+    const { actionName } = extendableActionConfiguration;
+
+    return this.$datastore.addItemToHashFieldByName(EXTENDABLE_ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName, extendableActionConfiguration);
+  }
+
+  /**
+   * Stores a resource structure.
+   *
+   * @argument {resourceStructure} resourceStructure
+   *
+   * @returns {Promise}
+   */
+  storeResourceStructure (resourceStructure) {
+    /**
+     * @typedef {Object} resourceStructure
+     * @property {String} contextName=Self
+     * @property {String} fileName
+     * @property {String} filePath
+     * @property {Object} propertiesByArgumentName
+     * @property {String} resourceAPIName
+     * @property {String} resourceType
+     */
+    if (nucleusValidator.isArray(resourceStructure)) {
+      const resourceStructureList = resourceStructure;
+
+      return Promise.all(resourceStructureList.map(this.storeResourceStructure.bind(this)));
+    }
+
+    const { resourceType } = resourceStructure;
+
+    return this.$datastore.addItemToHashFieldByName(RESOURCE_STRUCTURE_BY_RESOURCE_TYPE_TABLE_NAME, resourceType, resourceStructure);
   }
 
   /**
@@ -646,3 +740,59 @@ class NucleusEngine {
 }
 
 module.exports = NucleusEngine;
+
+/**
+ * Parses the Nucleus doclet tags.
+ *
+ * @argument {Array} docletTagList
+ * @argument {String} docletTagList[].originalTitle=Nucleus
+ * @argument {String} docletTagList[].title=nucleus
+ * @argument {String} docletTagList[].text
+ * @argument {String} docletTagList[].value
+ *
+ * @returns {Object}
+ */
+function parseNucleusTag (docletTagList) {
+
+  return docletTagList
+    .reduce((accumulator, { value }) => {
+      const [ nucleusTagName, ...nucleusTagOptionList ] = value.split(" ");
+
+      accumulator[nucleusValidator.shiftFirstLetterToLowerCase(nucleusTagName)] = (
+        (nucleusTagOptionList.length === 1) ?
+          nucleusTagOptionList[0] :
+          nucleusTagOptionList
+      );
+
+      return accumulator;
+    }, {});
+}
+
+/**
+ * Retrieves all doclets in path.
+ * @see https://github.com/jsdoc3/jsdoc/blob/master/lib/jsdoc/doclet.js
+ *
+ * @argument {String} path
+ *
+ * @returns {Promise<doclet[]>}
+ */
+function retrieveAllDocletsInPath (path) {
+
+  return new Promise((resolve, reject) => {
+    const chunkList = [];
+    const $$childProcess = childProcess.spawn(JSDocParserPath, [ '-X', '-r', path ], { cwd: process.cwd() });
+
+    $$childProcess.stdout.setEncoding('utf8');
+    $$childProcess.stderr.setEncoding('utf8');
+
+    $$childProcess.stdout.on('data', chunkList.push.bind(chunkList));
+    $$childProcess.stderr.on('data', reject);
+
+    $$childProcess.on('close', () => {
+      const docletList = JSON.parse(chunkList.join(''));
+
+      resolve(docletList);
+    });
+    $$childProcess.on('error', reject);
+  });
+}

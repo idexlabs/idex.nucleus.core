@@ -14,16 +14,18 @@
   "engines": {
     "node": ">=8.9"
   },
+  "repository": "git@github.com:sebastienfilion/idex.nucleus.git",
   "dependencies": {
     "bluebird": "^3.5.1",
     "jsdoc": "^3.5.5",
-    "node-uuid": "^1.4.8",
+    "uuid": "^3.2.1",
     "redis": "^2.8.0",
     "superstruct": "^0.5.2",
     "validator": "^9.4.1"
   },
   "devDependencies": {
     "chai": "latest",
+    "chai-as-promised": "^7.1.1",
     "eslint": "latest",
     "express": "^4.16.3",
     "mocha": "latest",

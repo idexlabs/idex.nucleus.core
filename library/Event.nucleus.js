@@ -52,7 +52,7 @@ class NucleusEvent extends NucleusResource {
 
       const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
 
-      super('NucleusEvent', eventResourceStructure, { name: eventName, message: eventMessage }, { originEngineID, originEngineName, originProcessID }, originUserID);
+      super('NucleusEvent', eventResourceStructure, { meta: { originEngineID, originEngineName, originProcessID }, name: eventName, message: eventMessage }, originUserID);
 
       /** @member {String} name */
       Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });

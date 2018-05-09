@@ -2,10 +2,12 @@
 
 const Promise = require('bluebird');
 const chai = require('chai');
+const chaiAsPromised = require('chai-as-promised');
 const mocha = require('mocha');
-const uuid = require('node-uuid');
+const path = require('path');
+const uuid = require('uuid');
 const sinon = require('sinon');
-const redis = require('redis');
+chai.use(chaiAsPromised);
 
 const NucleusAction = require('../library/Action.nucleus');
 const NucleusDatastore = require('../library/Datastore.nucleus');
@@ -13,11 +15,10 @@ const NucleusEngine = require('../library/Engine.nucleus');
 const NucleusError = require('../library/Error.nucleus');
 const NucleusEvent = require('../library/Event.nucleus');
 
-const DummyEngine = require('./Dummy.engine');
+const DummyEngine = require('./autodiscoveryTestAssets/Dummy.engine');
 
-const ACTION_CONFIGURATION_BY_ACTION_NAME = 'ActionConfigurationByActionName';
-const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME = 'ActionQueueNameByActionName';
-const ACTION_QUEUE_NAME_SET_ITEM_NAME = 'ActionQueueNameSet';
+const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME = 'ActionQueueNameByActionName';
+const ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME = 'ActionQueueNameSet';
 
 const DATASTORE_INDEX = 0;
 const DATASTORE_URL = 'localhost';
@@ -91,8 +92,8 @@ mocha.suite('Nucleus Engine', function () {
   mocha.suiteSetup(async function () {
     const { $datastore } = this;
 
-    await $datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME, 'Dummy');
-    await $datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME, 'ExecuteSimpleDummy', 'Dummy');
+    await $datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, 'Dummy');
+    await $datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, 'ExecuteSimpleDummy', 'Dummy');
 
   });
 
@@ -111,14 +112,16 @@ mocha.suite('Nucleus Engine', function () {
   mocha.suite("Actions", function () {
 
     mocha.suiteSetup(async function () {
-      const { $datastore } = this;
+      const { $dummyEngine } = this;
 
-      await $datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummy', {
+      await $dummyEngine.storeActionConfiguration({
+        actionName: 'ExecuteSimpleDummy',
         contextName: 'Self',
         methodName: 'executeSimpleDummy'
       });
 
-      await $datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME, 'ExecuteSimpleDummyWithArguments', {
+      await $dummyEngine.storeActionConfiguration({
+        actionName: 'ExecuteSimpleDummyWithArguments',
         actionSignature: [ 'AID1', 'AID2' ],
         argumentConfigurationByArgumentName: {
           AID1: 'string',
@@ -163,27 +166,26 @@ mocha.suite('Nucleus Engine', function () {
         chai.expect(finalMessage).to.deep.equal({ AID1, AID2 });
       });
 
-      mocha.test("Using an action name that was not configured throws an error.", function (done) {
+      mocha.test("Using an action name that was not configured throws an error.", function () {
         const { $dummyEngine } = this;
 
         const $action = new NucleusAction('UnknownAction', {});
 
-        $dummyEngine.executeAction($action)
-          .then(done.bind(undefined, new Error("Was expecting this to fail")))
-          .catch(done.bind(undefined, null));
+        return chai.expect($dummyEngine.executeAction.call($dummyEngine, $action))
+          .to.be.rejectedWith(NucleusError.UndefinedContextNucleusError);
       });
 
-      mocha.test("Passing a message that does not validate because its empty throws an error.", function (done) {
+      mocha.test("Passing a message that does not validate because its empty throws an error.", function () {
         const { $dummyEngine } = this;
 
         const $action = new NucleusAction('ExecuteSimpleDummyWithArguments', {});
 
-        $dummyEngine.executeAction($action)
-          .then(done.bind(undefined, new Error("Was expecting this to fail")))
-          .catch(done.bind(undefined, null));
+
+        return chai.expect($dummyEngine.executeAction.call($dummyEngine, $action))
+          .to.be.rejectedWith(NucleusError);
       });
 
-      mocha.test("Passing a message that does not validate because its properties have the wrong type throws an error.", function (done) {
+      mocha.test("Passing a message that does not validate because its properties have the wrong type throws an error.", function () {
         const { $dummyEngine } = this;
 
         const $action = new NucleusAction('ExecuteSimpleDummyWithArguments', {
@@ -191,9 +193,26 @@ mocha.suite('Nucleus Engine', function () {
           AID2: 2
         });
 
-        $dummyEngine.executeAction($action)
-          .then(done.bind(undefined, new Error("Was expecting this to fail")))
-          .catch(done.bind(undefined, null));
+        return chai.expect($dummyEngine.executeAction.call($dummyEngine, $action))
+          .to.be.rejectedWith(NucleusError);
+      });
+
+      mocha.suite.skip("Extendable action", function () {
+
+        mocha.test("----", function () {
+
+          mocha.suiteSetup(async function () {
+            const { $dummyEngine } = this;
+
+            await $dummyEngine.storeExtendableActionConfiguration({
+              actionNameToExtend: 'CreateResource',
+
+            });
+
+          });
+
+        });
+
       });
 
     });
@@ -332,11 +351,13 @@ mocha.suite('Nucleus Engine', function () {
   mocha.suite("Autodiscovery", function () {
 
     mocha.test("Autodiscovery test", async function () {
-      const {$dummyEngine} = this;
+      const { $dummyEngine } = this;
 
-      const {actionConfigurationList} = await $dummyEngine.autodiscover();
+      const { actionConfigurationList, extendableActionConfigurationList, resourceStructureList } = await $dummyEngine.autodiscover(path.join(__dirname, '/autodiscoveryTestAssets'));
 
       chai.expect(actionConfigurationList).to.have.length(4);
+      chai.expect(extendableActionConfigurationList).to.have.length(4);
+      chai.expect(resourceStructureList).to.have.length(1);
 
       chai.expect(actionConfigurationList[0]).to.deep.include({
         actionName: 'ExecuteSimpleDummy'
@@ -356,6 +377,26 @@ mocha.suite('Nucleus Engine', function () {
         actionName: 'ExecuteSimpleDummyWithComplexSignature',
         actionSignature: ['AID1', 'AID2'],
         actionAlternativeSignature: ['AID1', 'AID3']
+      });
+
+      chai.expect(extendableActionConfigurationList[0]).to.deep.include({
+        actionName: 'CreateResource'
+      });
+
+      chai.expect(extendableActionConfigurationList[1]).to.deep.include({
+        actionName: 'RemoveResourceByID'
+      });
+
+      chai.expect(extendableActionConfigurationList[2]).to.deep.include({
+        actionName: 'RetrieveResourceByID'
+      });
+
+      chai.expect(extendableActionConfigurationList[3]).to.deep.include({
+        actionName: 'UpdateResourceByID'
+      });
+
+      chai.expect(resourceStructureList[0]).to.deep.include({
+        resourceType: 'Dummy'
       });
 
       return Promise.resolve()

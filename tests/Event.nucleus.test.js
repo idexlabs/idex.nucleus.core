@@ -3,7 +3,7 @@
 const Promise = require('bluebird');
 const chai = require('chai');
 const mocha = require('mocha');
-const uuid = require('node-uuid');
+const uuid = require('uuid');
 const redis = require('redis');
 
 const NucleusEvent = require('../library/Event.nucleus');

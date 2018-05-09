@@ -5,15 +5,18 @@
  *
  * @author Sebastien Filion
  */
+const fs = require('fs');
+const path = require('path');
 
 const Promise = require('bluebird');
 const redis = require('redis');
 
-const NucleusError = require('./Error.nucleus')
+const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
 
+Promise.promisifyAll(fs);
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
 
@@ -385,61 +388,13 @@ class NucleusDatastore {
    * @throws Will throw an error if the item key is missing or an empty string.
    * @throws Will throw an error if the vector is not a string.
    */
-  removeAllTriplesFromHexastoreByVector (itemKey, vector) {
+  async removeAllTriplesFromHexastoreByVector (itemKey, vector) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
     if (!nucleusValidator.isString(vector)) throw new NucleusError.UnexpectedValueTypeNucleusError("The vector must be a string.");
 
-    return this.$$server.evaluateLUAScript(`
-local itemKey = ARGV[1]
-local vector = ARGV[2]
+    const removeAllTriplesFromHexastoreByVectorLuaScript = await fs.readFileAsync(path.join(__dirname, '/lua/removeAllTriplesFromHexastoreByVector.lua'), 'UTF8');
 
--- Retrieve all the tripple where the item is the subject.
-local SPOTrippleList = redis.call('ZRANGEBYLEX', itemKey, '[SPO:'.. vector ..':', '[SPO:'.. vector ..'\xff')
--- Retrieve all the tripple where the item is the object.
-local OPSTrippleList = redis.call('ZRANGEBYLEX', itemKey, '[OPS:'.. vector ..':', '[OPS:'.. vector ..'\xff')
-
--- Splits a tripple into a table
-function splitTripple (tripple)
-    local splittedTripple = {}
-    local index = 1
-    for vector in string.gmatch(tripple, "([^:]+)") do
-        splittedTripple[index] = vector
-        index = index + 1
-    end
-
-    return splittedTripple
-end
-
--- Removes a tripple
-function removeTripple (itemKey, subject, predicate, object)
-    redis.call('ZREM', itemKey, 'SPO'..subject..':'..predicate..':'..object)
-    redis.call('ZREM', itemKey, 'SOP'..subject..':'..object..':'..predicate)
-    redis.call('ZREM', itemKey, 'OPS'..object..':'..predicate..':'..subject)
-    redis.call('ZREM', itemKey, 'OSP'..object..':'..subject..':'..predicate)
-    redis.call('ZREM', itemKey, 'PSO'..predicate..':'..subject..':'..object)
-    redis.call('ZREM', itemKey, 'POS'..predicate..':'..object..':'..subject)
-end
-
-for tripple in SPOTrippleList do
-
-    local splittedTripple = splitTripple(tripple)
-    local subject = vector
-    local predicate = splittedTripple[3]
-    local object = splittedTripple[4]
-
-    removeTripple(itemKey, subject, predicate, object)
-end
-
-for tripple in OPSTrippleList do
-
-    local splittedTripple = splitTripple(tripple)
-    local subject = splittedTripple[4]
-    local predicate = splittedTripple[3]
-    local object = vector
-
-    removeTripple(itemKey, subject, predicate, object)
-end
-    `, itemKey, vector);
+    return this.evaluateLUAScript(removeAllTriplesFromHexastoreByVectorLuaScript, itemKey, vector);
   }
 
   /**
