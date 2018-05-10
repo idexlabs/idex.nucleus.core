@@ -18,9 +18,10 @@
   "dependencies": {
     "bluebird": "^3.5.1",
     "jsdoc": "^3.5.5",
-    "uuid": "^3.2.1",
+    "mustache": "^2.3.0",
     "redis": "^2.8.0",
     "superstruct": "^0.5.2",
+    "uuid": "^3.2.1",
     "validator": "^9.4.1"
   },
   "devDependencies": {

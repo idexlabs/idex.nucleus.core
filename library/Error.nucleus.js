@@ -34,7 +34,7 @@ class NucleusError extends Error {
 
     if (!!error && error instanceof Error) this.stack = error.stack;
 
-    const [ nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber ] = (error || this).stack.match($$stackOriginMetaRegularExpression).splice(1);
+    const [ nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber ] = ((error || this).stack.match($$stackOriginMetaRegularExpression) || []).splice(1);
 
     this.name = 'NucleusError';
     this.errorCode = 600;

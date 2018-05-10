@@ -109,6 +109,62 @@ mocha.suite('Nucleus Engine', function () {
     return $datastore.destroy();
   });
 
+  mocha.suite("Parsing template strings", function () {
+
+    mocha.test("Simple template strings are parsed as expected.", function () {
+
+      chai.expect(NucleusEngine.parseTemplateString({ world: "World" }, "`Hello ${world}!`")).to.equal("Hello World!");
+      chai.expect(NucleusEngine.parseTemplateString({ hello: "Hello", world: "World" }, "`${hello} ${world}!`")).to.equal("Hello World!");
+      chai.expect(NucleusEngine.parseTemplateString({ hello: "Hello", world: "World" }, "`${Nucleus.shiftFirstLetterToLowerCase(hello)} ${Nucleus.shiftFirstLetterToLowerCase(world)}!`")).to.equal("hello world!");
+      chai.expect(NucleusEngine.parseTemplateString({}, "`${2 + 2}`")).to.equal("4");
+    });
+
+    mocha.test("When required, the template string will be parsed as a promise.", function () {
+      const { $dummyEngine } = this;
+
+      chai.expect(NucleusEngine.parseTemplateString.call($dummyEngine, { resourceType: 'Dummy' }, "Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)"))
+        .to.eventually.be.a('function');
+    });
+
+    mocha.test("Using a JavaScript reserved word in the template string will throw an error.", function () {
+
+      chai.expect(() => { NucleusEngine.parseTemplateString({}, "process.exit(69)"); }).to.throw(NucleusError);
+    });
+
+  });
+
+  mocha.suite("#generateResourceModelFromResourceStructureByResourceType", function () {
+
+    mocha.setup(function () {
+      const { $dummyEngine } = this;
+
+      return $dummyEngine.storeResourceStructure({
+        resourceType: 'Dummy',
+        propertiesByArgumentName: {
+          name: 'string'
+        }
+      });
+    });
+
+    mocha.test("The Nucleus Resource Model will be bound with the correct resource structure.", async function () {
+      const { $dummyEngine } = this;
+      const resourceType = 'Dummy';
+      const dummyAttributes = { name: `Dummy ${uuid.v4()}` };
+      const authorUserID = uuid.v4();
+
+      const NucleusResourceModel = await $dummyEngine.generateResourceModelFromResourceStructureByResourceType(resourceType);
+
+      const $dummy = new NucleusResourceModel(dummyAttributes, authorUserID);
+
+      chai.expect($dummy).to.have.ownProperty('ID');
+      chai.expect($dummy).to.have.ownProperty('meta');
+      chai.expect($dummy).to.have.ownProperty('name');
+      chai.expect($dummy.name).to.equal(dummyAttributes.name);
+      chai.expect($dummy.meta.authorUserID).to.equal(authorUserID);
+    });
+
+  });
+
   mocha.suite("Actions", function () {
 
     mocha.suiteSetup(async function () {
@@ -130,6 +186,7 @@ mocha.suite('Nucleus Engine', function () {
         contextName: 'Self',
         methodName: 'executeSimpleDummyWithArguments'
       });
+
     });
 
     mocha.suiteTeardown(async function () {
@@ -197,20 +254,51 @@ mocha.suite('Nucleus Engine', function () {
           .to.be.rejectedWith(NucleusError);
       });
 
-      mocha.suite.skip("Extendable action", function () {
+      mocha.suite("Extendable action", function () {
 
-        mocha.test("----", function () {
+        mocha.suiteSetup(async function () {
+          const { $dummyEngine } = this;
 
-          mocha.suiteSetup(async function () {
-            const { $dummyEngine } = this;
-
-            await $dummyEngine.storeExtendableActionConfiguration({
-              actionNameToExtend: 'CreateResource',
-
-            });
-
+          await $dummyEngine.storeActionConfiguration({
+            actionNameToExtend: 'ExtendResource',
+            actionName: 'ExtendDummy',
+            argumentConfigurationByArgumentName: {
+              AID4: 'string'
+            },
+            filePath: path.join(__dirname, './autodiscoveryTestAssets/Dummy.api.js'),
           });
 
+          await $dummyEngine.storeExtendableActionConfiguration({
+            extendableActionArgumentDefault: {
+              AID1: '\'85b4a289-8a31-428b-9c7a-dea7538cb116\''
+            },
+            actionName: 'ExtendResource',
+            extendableActionName: '`Extend${resourceType}`',
+            extendableEventName: '`${resourceType}Extended`',
+            extendableAlternativeActionSignature: [ '\'AID1\'', '\'AID4\'', '\'AID3\'' ],
+            actionSignature: [ 'AID1', 'AID2', 'AID3' ],
+            argumentConfigurationByArgumentName: {
+              AID1: 'string',
+              AID2: 'string',
+              AID3: 'string'
+            },
+            contextName: 'DummyAPI',
+            filePath: path.join(__dirname, './autodiscoveryTestAssets/Dummy.api.js'),
+            methodName: 'extendResource'
+          });
+
+        });
+
+        mocha.test("The action's request message is correctly extended using the extendable argument defaults.", async function () {
+          const { $dummyEngine } = this;
+          const AID4 = uuid.v4();
+          const AID3 = uuid.v4();
+
+          const $action = new NucleusAction('ExtendDummy', { AID4, AID3 });
+
+          const { finalMessage } = await $dummyEngine.executeAction($action);
+
+          chai.expect(finalMessage).to.deep.equal({ AID1: '85b4a289-8a31-428b-9c7a-dea7538cb116', AID2: AID4, AID3 });
         });
 
       });
@@ -355,7 +443,7 @@ mocha.suite('Nucleus Engine', function () {
 
       const { actionConfigurationList, extendableActionConfigurationList, resourceStructureList } = await $dummyEngine.autodiscover(path.join(__dirname, '/autodiscoveryTestAssets'));
 
-      chai.expect(actionConfigurationList).to.have.length(4);
+      chai.expect(actionConfigurationList).to.have.length(5);
       chai.expect(extendableActionConfigurationList).to.have.length(4);
       chai.expect(resourceStructureList).to.have.length(1);
 

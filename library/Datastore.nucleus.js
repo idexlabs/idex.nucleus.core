@@ -173,7 +173,7 @@ class NucleusDatastore {
 
   /**
    * Adds a triple to a hexastore.
-   * @see http://www.vldb.org/pvldb/1/1453965.pdf
+   * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
    *
    * @argument {String} itemKey
    * @argument {String} subject
@@ -249,7 +249,7 @@ class NucleusDatastore {
    * @returns {NucleusDatastore}
    */
   duplicateConnection (datastoreName = `${this.name}Duplicate`) {
-    const { db: index, host: URL, port } = this.$$server;
+    const { db: index, host: URL, port } = this.$$server.options;
 
     return new NucleusDatastore(datastoreName, { index, URL, port });
   }
@@ -546,7 +546,8 @@ class NucleusDatastore {
 
   /**
    * Retrieves the any vector from any triple given the index scheme from a hexastore.
-   * @see http://www.vldb.org/pvldb/1/1453965.pdf
+   * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
+   *
    * @example
    * async $datastore.addTripleToHexastore('ResourceRelationship', userID, 'isMember', userGroupID);
    * const relationshipList = async $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'SOP', userID, userGroupID);

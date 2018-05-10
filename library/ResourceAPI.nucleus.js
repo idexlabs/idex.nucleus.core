@@ -18,13 +18,14 @@ class NucleusResourceAPI {
    * @Nucleus ActionName CreateResource
    * @Nucleus ExtendableActionName `Create${resourceType}`
    * @Nucleus ExtendableEventName `${resourceType}Created`
-   * @Nucleus ExtendableAlternativeActionSignature [`${shiftFirstLetterToLowerCase(resourceType)}ID`, 'requesterUserID']
-   * @Nucleus ArgumentDefault resourceType=`${resourceType}` NucleusResourceModel=NucleusResourceModel
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}Attributes` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
    *
    * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel
    * @argument {Object} resourceAttributes
    * @argument {String} originUserID
+   * @argument {String} [groupID]
    *
    * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberGroupID: String }>}
    *
@@ -78,8 +79,8 @@ class NucleusResourceAPI {
    * @Nucleus ActionName RemoveResourceByID
    * @Nucleus ExtendableActionName `Remove${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDRemoved`
-   * @Nucleus ExtendableAlternativeActionSignature [`${shiftFirstLetterToLowerCase(resourceType)}ID`, 'requesterUserID']
-   * @Nucleus ArgumentDefault resourceType=`${resourceType}`
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}`
    *
    * @argument {String} resourceType
    * @argument {String} resourceID
@@ -130,9 +131,8 @@ class NucleusResourceAPI {
    * @Nucleus ActionName RetrieveResourceByID
    * @Nucleus ExtendableActionName `Retrieve${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDRetrieved`
-   * @Nucleus ExtendableAlternativeActionSignature [`${shiftFirstLetterToLowerCase(resourceType)}ID`, 'requesterUserID']
-   * @Nucleus ArgumentDefault resourceType=`${resourceType}`
-   * @Nucleus ArgumentDefault NucleusResourceModel=NucleusResourceModel
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
    *
    * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel
@@ -183,9 +183,8 @@ class NucleusResourceAPI {
    * @Nucleus ActionName UpdateResourceByID
    * @Nucleus ExtendableActionName `Update${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDUpdated`
-   * @Nucleus ExtendableAlternativeActionSignature [`${shiftFirstLetterToLowerCase(resourceType)}ID`, `${shiftFirstLetterToLowerCase(resourceType)}`, 'requesterUserID']
-   * @Nucleus ArgumentDefault resourceType=`${resourceType}`
-   * @Nucleus ArgumentDefault NucleusResourceModel=NucleusResourceModel
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}Attributes` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
    *
    * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel

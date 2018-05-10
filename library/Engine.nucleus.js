@@ -9,13 +9,15 @@
 const Promise = require('bluebird');
 const childProcess = require('child_process');
 const JSDocParserPath = require.resolve('jsdoc/jsdoc.js');
-const uuid = require('uuid');
+const mustache = require('mustache');
 const path = require('path');
+const uuid = require('uuid');
 
 const NucleusAction = require('./Action.nucleus');
 const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
+const NucleusResource = require('./Resource.nucleus');
 const NucleusResourceRelationshipDatastore = require('./ResourceRelationshipDatastore.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
@@ -33,6 +35,13 @@ const PRODUCTION_ENVIRONMENT_NAME = 'production';
 
 const $$complexDataTypeRegularExpression = new RegExp(/([a-z]+)\.<[A-Za-z]+>/);
 const $$engineFileNameRegularExpression = new RegExp(/.*engine\.js$/);
+const $$javascriptReservedWordRegularExpressionList = [
+  /\s*delete.+/,
+  /\s*new Error\(.+/,
+  /\s*new\s*.+'/,
+  /\s*process\..+/
+];
+
 
 // NOTE: It seems like the system slows downs processing requests when there's a very high load (100+ requests under 25ms)
 // The issue is caused mostly by how the requests get parallelized,
@@ -123,10 +132,9 @@ class NucleusEngine {
    * @returns {Promise<{ actionConfigurationList: actionConfiguration[], extendableActionConfigurationList: extendableActionConfiguration[], resourceStructureList: resourceStructure[] }>}
    */
   async autodiscover (engineDirectoryPath = NucleusEngine.retrieveModuleDirectoryPath(this.name)) {
-
     // Retrieve all of the modules doclets using the JSDoc parser.
-    const engineDocletList = await retrieveAllDocletsInPath(engineDirectoryPath);
     const resourceAPIDocletList = await retrieveAllDocletsInPath(path.join(__dirname, '/ResourceAPI.nucleus.js'));
+    const engineDocletList = await retrieveAllDocletsInPath(engineDirectoryPath);
 
     // Filter out doclets that does not have a "Nucleus" tag.
     const filteredDocletList = [].concat(engineDocletList, resourceAPIDocletList)
@@ -172,6 +180,41 @@ class NucleusEngine {
       .filter(({ extendableActionName }) => {
 
         return !!extendableActionName;
+      })
+      .map((extendableActionConfiguration) => {
+        const { extendableActionArgumentDefault } = extendableActionConfiguration;
+
+        if (nucleusValidator.isArray(extendableActionArgumentDefault) && !nucleusValidator.isEmpty(extendableActionArgumentDefault)) {
+          extendableActionConfiguration.extendableActionArgumentDefault = NucleusDatastore.parseHashItem(extendableActionArgumentDefault);
+        }
+
+        return extendableActionConfiguration;
+      });
+
+    const extendableActionConfigurationByActionName = extendableActionConfigurationList
+      .reduce((accumulator, extendableActionConfiguration) => {
+        const { actionName } = extendableActionConfiguration;
+
+        accumulator[actionName] = extendableActionConfiguration;
+
+        return accumulator;
+      }, {});
+
+    // Add every action to extend as a proto action configuration to the action configuration list.
+    // All the other extendable properties will be parsed when the action is executed.
+    actionConfigurationList
+      .filter(({ actionNameToExtend }) => {
+
+        return !!actionNameToExtend;
+      })
+      .forEach(({ actionNameToExtend, filePath }, index) => {
+        const { extendableActionName } = extendableActionConfigurationByActionName[actionNameToExtend];
+
+        const context = require(filePath);
+
+        const actionName = NucleusEngine.parseTemplateString(context, extendableActionName);
+
+        actionConfigurationList[index].actionName = actionName;
       });
 
     const resourceStructureList = filteredDocletList
@@ -246,8 +289,8 @@ class NucleusEngine {
     const actionItemKey = $action.generateOwnItemKey();
 
     try {
-      // 1. Retrieve the action configuration.
-      const actionConfiguration = await this.$datastore.retrieveItemFromHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName);
+      // Retrieve the action configuration.
+      const actionConfiguration = await this.retrieveActionConfigurationByActionName(actionName);
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
@@ -256,65 +299,61 @@ class NucleusEngine {
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
       await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
 
-      const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
+      // The action be executed from an action configuration or an extendable action configuration;
+      const actionResponse = await (async function parseActionResponse () {
+        const { actionNameToExtend } = actionConfiguration;
 
-      // 2. Validate the action message.
-      const actionMessageArgumentList = Object.keys(actionMessage);
+        if (!!actionNameToExtend) {
+          const extendableActionConfiguration = await this.retrieveExtendableActionConfigurationByActionName(actionNameToExtend);
 
-      // Make sure that the message meets one of the proposed signature criteria.
-      const fulfilledActionSignature = [ actionSignature, actionAlternativeSignatureList ]
-        .filter((argumentNameList = []) => {
+          if (nucleusValidator.isEmpty(extendableActionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`${actionNameToExtend} is not an extendable action.`, { actionID, actionName });
 
-          return argumentNameList
-            .reduce((accumulator, argumentName) => {
-              if (argumentName === 'options') accumulator.push(argumentName);
-              if (argumentName === 'originUserID') accumulator.push(argumentName);
-              else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
+          const { extendableActionArgumentDefault = {}, actionAlternativeSignatureList, actionSignature = [], contextName = '', filePath = '', methodName = '' } = extendableActionConfiguration;
+          const argumentConfigurationByArgumentName = Object.assign({}, extendableActionConfiguration.argumentConfigurationByArgumentName, actionConfiguration.argumentConfigurationByArgumentName);
 
-              return accumulator;
-            }, []).length === argumentNameList.length;
-        })[0];
+          const actionSignatureList = [ actionSignature, actionAlternativeSignatureList ];
 
-      if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing");
+          const actionToExtendContext = require(actionConfiguration.filePath);
 
-      if (!nucleusValidator.isEmpty(argumentConfigurationByArgumentName)) {
-        if (!argumentConfigurationByArgumentName.hasOwnProperty('originUserID')) argumentConfigurationByArgumentName.originUserID = 'string';
+          if ('extendableAlternativeActionSignature' in extendableActionConfiguration) {
+            const extendedActionSignature = extendableActionConfiguration.extendableAlternativeActionSignature
+              .map(NucleusEngine.parseTemplateString.bind(null, Object.assign({}, actionMessage, actionToExtendContext)));
 
-        // User the argument configuration object to validate the action's message.
-        const Signature = nucleusValidator.struct(argumentConfigurationByArgumentName);
+            actionSignatureList.push(extendedActionSignature);
+          }
 
-        Signature(Object.assign({}, actionMessage, { originUserID: $action.originUserID }));
-      }
+          // Make sure that the message meets one of the proposed signature criteria.
+          // Fulfil the action signature with the default arguments...
+          const parsedExtendableActionArgumentDefault = await (async function parseExtendableActionArgumentDefault () {
+            await Promise.all(Object.keys(extendableActionArgumentDefault)
+              .map(async (key) => {
+                const value = extendableActionArgumentDefault[key];
+                const parsedValue = await NucleusEngine.parseTemplateString.call(this, Object.assign({}, actionMessage, actionToExtendContext), value);
 
-      const argumentList = fulfilledActionSignature
-        .reduce((accumulator, argumentName) => {
-          if (argumentName === 'options') accumulator.push(actionMessage);
-          if (argumentName === 'originUserID') accumulator.push($action.originUserID);
-          else accumulator.push(actionMessage[argumentName]);
+                extendableActionArgumentDefault[key] = parsedValue;
+              }));
 
-          return accumulator;
-        }, []);
+            return extendableActionArgumentDefault;
+          }).call(this);
 
-      // 3. Retrieve the execution context of the method to execute.
-      const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
+          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), actionSignatureList, argumentConfigurationByArgumentName, parsedExtendableActionArgumentDefault);
 
-      // 4. Execute action.
-      const actionResponse = await $executionContext[methodName].apply((
-        // If the action is part of the current engine, the context of the method to execute will be `this`...
-        (contextName === 'Self')) ?
-          this :
-          // If the action is part of an external API file, the context will be either:
-          // The local datastore or...
-          // The local datastore and a relationship datastore if available.
-          (this.$resourceRelationshipDatastore) ?
-            { $datastore: this.$datastore, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore } :
-            { $datastore: this.$datastore }, argumentList);
+          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
+        } else {
+          const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
+
+          // Make sure that the message meets one of the proposed signature criteria.
+          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), [ actionSignature, actionAlternativeSignatureList ], argumentConfigurationByArgumentName);
+
+          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
+        }
+      }).call(this);
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);
       await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
-      // 5. Send event to action channel.
+      // Send event to action channel.
       const $event = new NucleusEvent('ActionStatusUpdated', {
         actionFinalMessage: actionResponse,
         actionID,
@@ -328,7 +367,7 @@ class NucleusEngine {
 
       return Promise.resolve($action);
     } catch (error) {
-      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, error);
+      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { error });
 
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
@@ -336,6 +375,107 @@ class NucleusEngine {
 
       return Promise.reject(error);
     }
+  }
+
+  /**
+   * Executes the action given its context.
+   *
+   * @argument {NucleusAction} $action
+   * @argument {String[]} actionSignature
+   * @argument {String} contextName=Self
+   * @argument {String} filePath
+   * @argument {String} methodName
+   *
+   * @returns {Promise<Object>}
+   */
+  async executeMethodInContext($action, actionMessage, actionSignature, contextName, filePath, methodName) {
+    const argumentList = actionSignature
+      .reduce((accumulator, argumentName) => {
+        if (argumentName === 'options') accumulator.push(actionMessage);
+        if (argumentName === 'originUserID') accumulator.push($action.originUserID);
+        else accumulator.push(actionMessage[argumentName]);
+
+        return accumulator;
+      }, []);
+
+    const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
+
+    const actionResponse = await $executionContext[methodName].apply((
+      // If the action is part of the current engine, the context of the method to execute will be `this`...
+      (contextName === 'Self')) ?
+      this :
+      // If the action is part of an external API file, the context will be either:
+      // The local datastore or...
+      // The local datastore and a relationship datastore if available.
+      (this.$resourceRelationshipDatastore) ?
+        {$datastore: this.$datastore, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore} :
+        {$datastore: this.$datastore}, argumentList);
+
+    return actionResponse;
+  }
+
+  /**
+   * Fulfils an action signature given different options and the argument configuration.
+   *
+   * @argument {NucleusAction} $action
+   * @argument {Array[]} actionSignatureList
+   * @argument {Object} argumentConfigurationByArgumentName
+   *
+   * @returns {String[]}
+   */
+  fulfilActionSignature($action, actionMessage, actionSignatureList, argumentConfigurationByArgumentName, defaults) {
+    const actionMessageArgumentList = Object.keys(actionMessage);
+
+    const fulfilledActionSignature = actionSignatureList
+      .filter((argumentNameList) => {
+        if (!argumentNameList) return false;
+
+        return argumentNameList
+          .reduce((accumulator, argumentName) => {
+            if (argumentName === 'options') accumulator.push(argumentName);
+            if (argumentName === 'originUserID') accumulator.push(argumentName);
+            else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
+
+            return accumulator;
+          }, []).length === argumentNameList.length;
+      })[0];
+
+    if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing");
+
+    if (!nucleusValidator.isEmpty(argumentConfigurationByArgumentName)) {
+      if (!argumentConfigurationByArgumentName.hasOwnProperty('originUserID')) argumentConfigurationByArgumentName.originUserID = 'string';
+
+      // Use the argument configuration object to validate the action's message property types.
+      const validateActionArgument = nucleusValidator.struct(Object.keys(argumentConfigurationByArgumentName)
+        .reduce((accumulator, argumentName) => {
+          if (fulfilledActionSignature.includes(argumentName)) accumulator[argumentName] = argumentConfigurationByArgumentName[argumentName];
+
+          return accumulator;
+        }, {}));
+
+      // Will throw an error if the action message does not validate.
+      validateActionArgument(Object.keys(actionMessage)
+        .reduce((accumulator, argumentName) => {
+          if (fulfilledActionSignature.includes(argumentName)) accumulator[argumentName] = actionMessage[argumentName];
+
+          return accumulator;
+        }, {}));
+    }
+
+    return fulfilledActionSignature;
+  }
+
+  /**
+   * Generates a Resource Model from a resource structure given the resource type.
+   *
+   * @argument {String} resourceType
+   *
+   * @returns {Promise<Function>}
+   */
+  async generateResourceModelFromResourceStructureByResourceType (resourceType) {
+    const { propertiesByArgumentName = {} } = await this.retrieveResourceStructureByResourceType(resourceType) || {};
+
+    return NucleusResource.bind(null, resourceType, propertiesByArgumentName);
   }
 
   /**
@@ -487,6 +627,37 @@ class NucleusEngine {
       .return({ channelName, $event });
   }
 
+  /**
+   * Retrieves the action configurations given an action name.
+   *
+   * @argument {String} actionName
+   *
+   * @returns {Promise<actionConfiguration>}
+   */
+  retrieveActionConfigurationByActionName (actionName) {
+
+    return this.$datastore.retrieveItemFromHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName);
+  }
+
+  /**
+   * Retrieves the extendable action configurations given an action name.
+   *
+   * @argument {String} actionName
+   *
+   * @returns {Promise<extendableActionConfiguration>}
+   */
+  retrieveExtendableActionConfigurationByActionName (actionName) {
+
+    return this.$datastore.retrieveItemFromHashFieldByName(EXTENDABLE_ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName);
+  }
+
+  /**
+   * Retrieves a pending action name and call the execution.
+   *
+   * @argument {String} actionQueueName
+   *
+   * @returns {Promise<void>}
+   */
   async retrievePendingAction (actionQueueName) {
     const $handlerDatastore = (this.$handlerDatastoreByName.hasOwnProperty(`${actionQueueName}Handler`)) ?
       this.$handlerDatastoreByName[`${actionQueueName}Handler`] :
@@ -515,6 +686,18 @@ class NucleusEngine {
     } catch (error) {
       this.$logger.warn(`In progress: ${error}`);
     }
+  }
+
+  /**
+   * Retrieves the resource structure given a resource type.
+   *
+   * @argument {String} resourceType
+   *
+   * @returns {Promise<resourceStructure>}
+   */
+  retrieveResourceStructureByResourceType (resourceType) {
+
+    return this.$datastore.retrieveItemFromHashFieldByName(RESOURCE_STRUCTURE_BY_RESOURCE_TYPE_TABLE_NAME, resourceType);
   }
 
   /**
@@ -562,6 +745,7 @@ class NucleusEngine {
   storeExtendableActionConfiguration (extendableActionConfiguration) {
     /**
      * @typedef {Object} extendableActionConfiguration
+     * @property {Object} extendableActionArgumentDefault
      * @property {String} actionName
      * @property {String[]} [alternativeActionSignature]
      * @property {String[]} [actionSignature]
@@ -723,6 +907,58 @@ class NucleusEngine {
   }
 
   /**
+   * Parses a template string.
+   * @example
+   * const parsedString = Nucleus.parseTemplateString({ world: "World" }, "`Hello ${world}!`");
+   * // parsedString === 'Hello World!'
+   *
+   * @argument {Object} context
+   * @argument {String} string
+   *
+   * @returns {Promise|*}
+   */
+  static parseTemplateString (context, string) {
+    if (!nucleusValidator.isObject(context)) throw new NucleusError.UnexpectedValueTypeNucleusError("The context must be an object.");
+    if (!nucleusValidator.isString(string)) throw new NucleusError.UnexpectedValueTypeNucleusError("The template string must be a string.");
+
+    const Nucleus = {
+      shiftFirstLetterToLowerCase: nucleusValidator.shiftFirstLetterToLowerCase
+    };
+
+    if (!!this && 'generateResourceModelFromResourceStructureByResourceType' in (this || {})) Nucleus.generateResourceModelFromResourceStructureByResourceType = this.generateResourceModelFromResourceStructureByResourceType;
+
+    const propertyList = (string.match(/[A-Za-z0-9$\.\_\-]+/g) || [])
+      .filter((propertyName) => {
+        if (propertyName === '$') return false;
+
+        return propertyName in context;
+      });
+
+    if (string.includes('Nucleus.generateResourceModelFromResourceStructureByResourceType')) {
+      if (!('$datastore' in this) || !('generateResourceModelFromResourceStructureByResourceType' in this)) throw new NucleusError.UndefinedContextNucleusError("`Nucleus.generateResourceModelFromResourceStructureByResourceType` can't be called without a Nucleus Engine context. `NucleusEngine.parseTemplateString.apply($engine, argumentList)`");
+
+      Nucleus.generateResourceModelFromResourceStructureByResourceType = this.generateResourceModelFromResourceStructureByResourceType.bind(this);
+    }
+
+    for (let $$javascriptReservedWordRegularExpression of $$javascriptReservedWordRegularExpressionList) {
+      if ($$javascriptReservedWordRegularExpression.test(string)) throw new NucleusError(`Using certain JavaScript reserved words in unauthorized in a template string.`);
+    }
+
+    try {
+      const evaluatedString = new Function('Nucleus', 'context', `
+      const { ${propertyList.join(', ')} } = context;
+    
+      return ${string}
+    `)(Nucleus, context);
+
+      return evaluatedString;
+    } catch (error) {
+
+      throw new NucleusError(`Could not parse template string: "${string}" because of an external error.`, { error });
+    }
+  }
+
+  /**
    * Retrieves the current module directory path.
    *
    * @argument {Object} [moduleNode=module.parent] - Used for recursion.
@@ -770,7 +1006,7 @@ function parseNucleusTag (docletTagList) {
 
 /**
  * Retrieves all doclets in path.
- * @see https://github.com/jsdoc3/jsdoc/blob/master/lib/jsdoc/doclet.js
+ * @see {@link https://github.com/jsdoc3/jsdoc/blob/master/lib/jsdoc/doclet.js|JSDoc Doclet|}
  *
  * @argument {String} path
  *

@@ -5,7 +5,7 @@ const { NucleusResource, NucleusResourceAPI } = require('../../');
 class DummyResourceModel extends NucleusResource {
 
   constructor (resourceAttributes, authorUserID) {
-    super('Dummy', { name: 'string' }, resourceAttributes, {}, authorUserID);
+    super('Dummy', { name: 'string' }, resourceAttributes, authorUserID);
   }
 
 }
