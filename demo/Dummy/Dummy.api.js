@@ -1,31 +1,68 @@
 "use strict";
 
-const { NucleusResource, NucleusResourceAPI } = require('../../');
+/**
+ * @fileOverview Automatically generates the persistent storage API for the Dummy resource.
+ * @see NucleusResourceAPI
+ *
+ * @author Sebastien Filion <sebastien@sofdesk.com>
+ */
 
-class DummyResourceModel extends NucleusResource {
-
-  constructor (resourceAttributes, authorUserID) {
-    super('Dummy', { name: 'string' }, resourceAttributes, authorUserID);
-  }
-
-}
+const resourceType = 'Dummy';
 
 /**
- * @Nucleus ActionName CreateDummy
+ * @Nucleus ResourceAPIName DummyAPI
  *
- * @argument {Object} dummy
- * @argument {String} originUserID
- *
- * @returns {Promise<{ dummy: Dummy }>}
- * @memberOf DummyAPI
+ * @typedef {Object} Dummy
+ * @property {String} [catalogItemID]
+ * @property {String|Object} description
+ * @property {String|Object} name
+ * @property {String|Object} title
  */
-function create (dummy, originUserID) {
 
-  return NucleusResourceAPI.create.call(this, 'Dummy', DummyResourceModel, dummy, originUserID);
-}
+/**
+ * @Nucleus ActionNameToExtend CreateResource
+ *
+ * @argument {Object} dummyAttributes
+ * @argument {String} originDummyID
+ *
+ * @memberOf DummyAPI
+ * @function create
+ */
 
-const DummyAPI = {
-  create
+/**
+ * @Nucleus ActionNameToExtend RemoveResourceByID
+ *
+ * @argument {String} dummyID
+ * @argument {String} originDummyID
+ *
+ * @memberOf DummyAPI
+ * @function removeByID
+ */
+
+/**
+ * @Nucleus ActionNameToExtend RetrieveResourceByID
+ *
+ * @argument {String} dummyID
+ * @argument {String} originDummyID
+ *
+ * @memberOf DummyAPI
+ * @function retrieveByID
+ */
+
+/**
+ * @Nucleus ActionNameToExtend UpdateResourceByID
+ *
+ * @argument {String} dummyID
+ * @argument {Object} dummyAttributes
+ * @argument {String} originDummyID
+ *
+ * @memberOf DummyAPI
+ * @function updateByID
+ */
+
+/**
+ * @class DummyAPI
+ */
+module.exports = {
+  resourceType
 };
-
-module.exports = DummyAPI;

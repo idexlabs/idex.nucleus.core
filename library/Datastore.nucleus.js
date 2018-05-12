@@ -88,7 +88,7 @@ class NucleusDatastore {
    * @argument {String} itemKey
    * @argument {String} [itemField]
    * @argument {*} [item]
-   * @argument {*[]} [hashList]
+   * @argument {Array} [hashList]
    *
    * @returns {Promise<*>}
    *
@@ -134,7 +134,7 @@ class NucleusDatastore {
    *
    * @argument {String} itemKey
    * @argument {*} item
-   * @argument {*[]} [itemList]
+   * @argument {Array} [itemList]
    *
    * @returns {Promise<*>}
    *

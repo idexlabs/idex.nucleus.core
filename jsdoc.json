@@ -1,0 +1,19 @@
+{
+  "markdown": {
+    "tags": [
+      "argument",
+      "typedef"
+    ]
+  },
+  "opts": {
+    "encoding": "utf8",
+    "destination": "./documentation/",
+    "recurse": true
+  },
+  "plugins": [
+    "plugins/markdown"
+  ],
+  "source": {
+    "include": [ "./library" ]
+  }
+}
