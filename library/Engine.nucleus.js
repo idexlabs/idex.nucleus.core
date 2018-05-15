@@ -107,7 +107,8 @@ class NucleusEngine {
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
       .then(this.verifyRedisConfiguration.bind(this))
       .then(() => { return this.$datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName); })
-      .then(() => { if (automaticallyAutodiscover) return this.autodiscover(); })
+      // If the `automaticallyAutodiscover` flag is true, pass the engine directory path that should be set from the parent class.
+      .then(() => { if (automaticallyAutodiscover) return this.autodiscover(this.engineDirectoryPath); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
@@ -962,11 +963,13 @@ class NucleusEngine {
    * Retrieves the current module directory path.
    *
    * @argument {Object} [moduleNode=module.parent] - Used for recursion.
-   * @argument {Object} [moduleDirectoryPath] - Used for recursion.
+   * @argument {Object} [moduleNode] - Used for recursion.
    *
    * @returns {String}
    */
   static retrieveModuleDirectoryPath (moduleName, moduleNode = module.parent) {
+    // NOTE: This doesn't work as expected because if multiple engine calls the Nucleus engine module, the first engine
+    // to call it becomes the parent.
     if (nucleusValidator.isEmpty(moduleNode)) throw new NucleusError.UndefinedContextNucleusError(`Could not find any engine for the module "${moduleName}".`);
 
     if (!new RegExp(`.*${moduleName}.*`).test(moduleNode.filename)) return NucleusEngine.retrieveModuleDirectoryPath(moduleName, moduleNode.parent);
