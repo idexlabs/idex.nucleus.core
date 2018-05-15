@@ -7,6 +7,7 @@ const NucleusError = require('./library/Error.nucleus');
 const NucleusEvent = require('./library/Event.nucleus');
 const NucleusResource = require('./library/Resource.nucleus');
 const NucleusResourceAPI = require('./library/ResourceAPI.nucleus');
+const nucleusValidator = require('./library/validator.nucleus');
 
 module.exports = {
   NucleusAction,
@@ -15,5 +16,6 @@ module.exports = {
   NucleusError,
   NucleusEvent,
   NucleusResource,
-  NucleusResourceAPI
+  NucleusResourceAPI,
+  nucleusValidator
 };
