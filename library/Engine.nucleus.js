@@ -406,11 +406,11 @@ class NucleusEngine {
       (contextName === 'Self')) ?
       this :
       // If the action is part of an external API file, the context will be either:
-      // The local datastore or...
-      // The local datastore and a relationship datastore if available.
+      // The local datastore and the local logger or...
+      // The local datastore, the local logger and a relationship datastore, if available.
       (this.$resourceRelationshipDatastore) ?
-        {$datastore: this.$datastore, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore} :
-        {$datastore: this.$datastore}, argumentList);
+        {$datastore: this.$datastore, $logger: this.$logger, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore} :
+        {$datastore: this.$datastore, $logger: this.$logger }, argumentList);
 
     return actionResponse;
   }
