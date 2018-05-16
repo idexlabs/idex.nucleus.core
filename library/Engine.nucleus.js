@@ -1024,7 +1024,7 @@ function retrieveAllDocletsInPath (path) {
 
   return new Promise((resolve, reject) => {
     const chunkList = [];
-    const $$childProcess = childProcess.spawn(JSDocParserPath, [ '-X', '-r', path ], { cwd: process.cwd() });
+    const $$childProcess = childProcess.spawn('node', [ JSDocParserPath, '-X', '-r', path ], { cwd: process.cwd() });
 
     $$childProcess.stdout.setEncoding('utf8');
     $$childProcess.stderr.setEncoding('utf8');
