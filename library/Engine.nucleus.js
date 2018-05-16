@@ -228,7 +228,7 @@ class NucleusEngine {
 
         const propertiesByArgumentName = (doclet.properties || [])
           .reduce((accumulator, { name: argumentName, optional: argumentIsOptional, type: { names: argumentTypeList } }) => {
-            const cleanedArgumentType = nucleusValidator.shiftFirstLetterToLowerCase(argumentTypeList.join('|')).replace($$complexDataTypeRegularExpression, "$1");
+            const cleanedArgumentType = argumentTypeList.map(nucleusValidator.shiftFirstLetterToLowerCase).join('|').replace($$complexDataTypeRegularExpression, "$1");
             accumulator[argumentName] = (!!argumentIsOptional) ? `${cleanedArgumentType}?` : cleanedArgumentType;
 
             return accumulator;
@@ -242,6 +242,8 @@ class NucleusEngine {
           filePath: path.join(doclet.meta.path, doclet.meta.filename),
         }, nucleusTagsByName);
       });
+
+    await this.$actionDatastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName);
 
     await this.storeActionConfiguration(actionConfigurationList);
 
@@ -298,7 +300,7 @@ class NucleusEngine {
       this.$logger.debug(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
 
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
+      await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
 
       // The action be executed from an action configuration or an extendable action configuration;
       const actionResponse = await (async function parseActionResponse () {
@@ -352,7 +354,7 @@ class NucleusEngine {
 
       $action.updateStatus(NucleusAction.CompletedActionStatus);
       $action.updateMessage(actionResponse);
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       // Send event to action channel.
       const $event = new NucleusEvent('ActionStatusUpdated', {
@@ -372,7 +374,7 @@ class NucleusEngine {
 
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
-      await this.$datastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
+      await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
       return Promise.reject(error);
     }
@@ -441,7 +443,10 @@ class NucleusEngine {
           }, []).length === argumentNameList.length;
       })[0];
 
-    if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing");
+    if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing", {
+      actionSignatureList,
+      actionMessagePropertyList: Object.keys(actionMessage)
+    });
 
     if (!nucleusValidator.isEmpty(argumentConfigurationByArgumentName)) {
       if (!argumentConfigurationByArgumentName.hasOwnProperty('originUserID')) argumentConfigurationByArgumentName.originUserID = 'string';
@@ -732,7 +737,7 @@ class NucleusEngine {
 
     return Promise.all([
       this.$datastore.addItemToHashFieldByName(ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME, actionName, actionConfiguration),
-      this.$datastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName, this.defaultActionQueueName)
+      this.$actionDatastore.addItemToHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName, this.defaultActionQueueName)
     ]);
   }
 

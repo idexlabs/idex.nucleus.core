@@ -37,8 +37,6 @@ class NucleusResource {
    * @returns {NucleusResource}
    */
   constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, authorUserID) {
-    // resourceAttributes, resourceMeta = {}, authorUserID = 'Unknown'
-
     if (nucleusValidator.isString(resourceAttributes.ID) && nucleusValidator.isObject(resourceAttributes.meta)) {
       Object.assign(this, resourceAttributes);
 

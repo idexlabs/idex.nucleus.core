@@ -5,6 +5,7 @@
  *
  * @author Sebastien Filion
  */
+const nucleusValidator = require('./validator.nucleus');
 
 const $$stackOriginMetaRegularExpression = new RegExp('^([A-Za-z]+):.*\\s*at\\s(.*)\\s\\((.*):([0-9]+):([0-9]+)\\)', 'm');
 
@@ -46,6 +47,11 @@ class NucleusError extends Error {
       writable: false,
       enumerable: true
     });
+
+    if (!nucleusValidator.isEmpty(options)) {
+      Reflect.deleteProperty(options, 'error');
+      this.meta = options;
+    }
   }
 
   [Symbol.toPrimitive] (primitiveType) {
