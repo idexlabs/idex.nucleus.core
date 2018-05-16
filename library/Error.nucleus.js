@@ -76,8 +76,8 @@ class UnauthorizedActionNucleusError extends NucleusError {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
-    super(errorMessage);
+  constructor (errorMessage, options) {
+    super(errorMessage, options);
 
     this.name = 'UnauthorizedActionNucleusError';
     this.errorCode = 605;
@@ -92,8 +92,8 @@ class UndefinedContextNucleusError extends NucleusError {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
-    super(errorMessage);
+  constructor (errorMessage, options) {
+    super(errorMessage, options);
 
     this.name = 'UndefinedContextNucleusError';
     this.errorCode = 604;
@@ -108,8 +108,8 @@ class UndefinedValueNucleusError extends NucleusError {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
-    super(errorMessage);
+  constructor (errorMessage, options) {
+    super(errorMessage, options);
 
     this.name = 'UndefinedValueNucleusError';
     this.errorCode = 601;
@@ -125,8 +125,8 @@ class UnexpectedValueNucleusError extends NucleusError {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
-    super(errorMessage);
+  constructor (errorMessage, options) {
+    super(errorMessage, options);
 
     this.name = 'UnexpectedValueNucleusError';
     this.errorCode = 602;
@@ -142,8 +142,8 @@ class UnexpectedValueTypeNucleusError extends NucleusError {
    *
    * @argument {String} errorMessage
    */
-  constructor (errorMessage) {
-    super(errorMessage);
+  constructor (errorMessage, options) {
+    super(errorMessage, options);
 
     this.name = 'UnexpectedValueTypeNucleusError';
     this.errorCode = 603;

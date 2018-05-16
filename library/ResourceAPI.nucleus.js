@@ -16,6 +16,7 @@ class NucleusResourceAPI {
    * Creates a resource given its name and an object of its attributes.
    *
    * @Nucleus ActionName CreateResource
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceAttributes originUserID
    * @Nucleus ExtendableActionName `Create${resourceType}`
    * @Nucleus ExtendableEventName `${resourceType}Created`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}Attributes` 'originUserID'
@@ -77,6 +78,7 @@ class NucleusResourceAPI {
    * Removes a resource given its name and ID.
    *
    * @Nucleus ActionName RemoveResourceByID
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
    * @Nucleus ExtendableActionName `Remove${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDRemoved`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
@@ -129,6 +131,7 @@ class NucleusResourceAPI {
    * Retrieves a resource given its ID.
    *
    * @Nucleus ActionName RetrieveResourceByID
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
    * @Nucleus ExtendableActionName `Retrieve${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDRetrieved`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
@@ -181,6 +184,7 @@ class NucleusResourceAPI {
    * Updates a resource given its ID.
    *
    * @Nucleus ActionName UpdateResourceByID
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID resourceAttributes originUserID
    * @Nucleus ExtendableActionName `Update${resourceType}ByID`
    * @Nucleus ExtendableEventName `${resourceType}ByIDUpdated`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}Attributes` 'originUserID'
@@ -230,6 +234,8 @@ class NucleusResourceAPI {
         staleResourceAttributes.meta = Object.assign({ updatedISOTime }, staleResourceAttributes.meta);
 
         const $resource = new NucleusResourceModel(Object.assign({}, staleResourceAttributes, resourceAttributes), originUserID);
+
+        $resource.meta.updatedISOTime = new Date().toISOString();
 
         return $datastore.addItemToHashFieldByName(resourceItemKey, Object.assign({}, { meta: $resource.meta }, resourceAttributes))
           .return({ resource: $resource });

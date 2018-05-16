@@ -311,10 +311,10 @@ class NucleusEngine {
 
           if (nucleusValidator.isEmpty(extendableActionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`${actionNameToExtend} is not an extendable action.`, { actionID, actionName });
 
-          const { extendableActionArgumentDefault = {}, actionAlternativeSignatureList, actionSignature = [], contextName = '', filePath = '', methodName = '' } = extendableActionConfiguration;
+          const { extendableActionArgumentDefault = {}, actionAlternativeSignature, actionSignature = [], contextName = '', filePath = '', methodName = '' } = extendableActionConfiguration;
           const argumentConfigurationByArgumentName = Object.assign({}, extendableActionConfiguration.argumentConfigurationByArgumentName, actionConfiguration.argumentConfigurationByArgumentName);
 
-          const actionSignatureList = [ actionSignature, actionAlternativeSignatureList ];
+          const actionSignatureList = [ actionSignature, actionAlternativeSignature ];
 
           const actionToExtendContext = require(actionConfiguration.filePath);
 
@@ -343,10 +343,10 @@ class NucleusEngine {
 
           return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
         } else {
-          const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignatureList } = actionConfiguration;
+          const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignature } = actionConfiguration;
 
           // Make sure that the message meets one of the proposed signature criteria.
-          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), [ actionSignature, actionAlternativeSignatureList ], argumentConfigurationByArgumentName);
+          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), [ actionSignature, actionAlternativeSignature ], argumentConfigurationByArgumentName);
 
           return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
         }
