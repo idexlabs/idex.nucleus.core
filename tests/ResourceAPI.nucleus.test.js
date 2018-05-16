@@ -285,8 +285,8 @@ mocha.suite("Nucleus Resource API", function () {
 
     class DummyResourceModel extends NucleusResource {
 
-      constructor (resourceAttributes, authorUserID) {
-        super('Dummy', { name: 'string' }, resourceAttributes, authorUserID);
+      constructor (resourceAttributes, authorUserID, reservedID) {
+        super('Dummy', { name: 'string' }, resourceAttributes, authorUserID, reservedID);
       }
     }
 
@@ -432,11 +432,11 @@ mocha.suite("Nucleus Resource API", function () {
         const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
 
         return NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, groupID)
-          .then(({ resource, resourceAuthorID, resourceMemberGroupID }) => {
+          .then(({ resource, resourceAuthorID, resourceMemberNodeID }) => {
             chai.expect(resource).to.be.an.instanceOf(NucleusResource);
             chai.expect(resource).to.deep.include(dummyAttributes);
             chai.expect(resourceAuthorID).to.equal(authorUserID);
-            chai.expect(resourceMemberGroupID).to.equal(groupID);
+            chai.expect(resourceMemberNodeID).to.equal(groupID);
           });
       });
 
@@ -449,7 +449,20 @@ mocha.suite("Nucleus Resource API", function () {
         const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
-          .to.eventually.deep.include({ resourceMemberGroupID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5' });
+          .to.eventually.deep.include({ resourceMemberNodeID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5' });
+      });
+
+      mocha.test.skip("The resource can reserve its own ID.", function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        const dummyAttributes = {
+          ID: uuid.v4(),
+          name: `Dummy ${uuid.v4()}`
+        };
+        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+
+        return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
+          .to.eventually.deep.include({ resource: { ID: dummyAttributes.ID } });
       });
 
       mocha.test("Using resource attributes that doesn't validate against the resource model throws an error.", function () {

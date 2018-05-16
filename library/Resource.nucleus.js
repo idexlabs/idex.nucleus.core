@@ -36,7 +36,7 @@ class NucleusResource {
    *
    * @returns {NucleusResource}
    */
-  constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, authorUserID) {
+  constructor (resourceType = 'Undefined', resourceStructure, resourceAttributes, authorUserID, reservedResourceID) {
     if (nucleusValidator.isString(resourceAttributes.ID) && nucleusValidator.isObject(resourceAttributes.meta)) {
       Object.assign(this, resourceAttributes);
 
@@ -55,13 +55,22 @@ class NucleusResource {
         writable: true
       });
 
+      const cleanedResourceAttributes = Object.keys(resourceAttributes)
+        .reduce((accumulator, propertyName) => {
+          if (propertyName !== 'ID' && propertyName !== 'meta' && propertyName !== 'originUserID' && propertyName !== 'type') accumulator[propertyName] = resourceAttributes[propertyName];
+
+          return accumulator;
+        }, {});
+
+      new nucleusValidator.struct(resourceStructure)(cleanedResourceAttributes);
+
     } else {
       const resourceMeta = resourceAttributes.meta || {};
 
       Reflect.deleteProperty(resourceAttributes, 'meta');
 
       /** @member {String} ID */
-      Reflect.defineProperty(this, 'ID', { enumerable: true, value: uuid.v1(), writable: false });
+      Reflect.defineProperty(this, 'ID', { enumerable: true, value: reservedResourceID || uuid.v1(), writable: false });
 
       /** @member {String} ID */
       Reflect.defineProperty(this, 'type', { enumerable: true, value: resourceType, writable: false });

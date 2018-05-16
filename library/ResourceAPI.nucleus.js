@@ -26,9 +26,9 @@ class NucleusResourceAPI {
    * @argument {Function} NucleusResourceModel
    * @argument {Object} resourceAttributes
    * @argument {String} originUserID
-   * @argument {String} [groupID]
+   * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberGroupID: String }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberNodeID: String }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -37,7 +37,7 @@ class NucleusResourceAPI {
    * @throws Will throw an error if no datastore is passed.
    * @throws Will throw an error if the resource is not conform to the model.
    */
-  static async createResource (resourceType, NucleusResourceModel, resourceAttributes, originUserID, groupID) {
+  static async createResource (resourceType, NucleusResourceModel, resourceAttributes, originUserID, parentNodeID) {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
     if (!nucleusValidator.isObject(resourceAttributes)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource attributes must be an object.");
@@ -47,12 +47,15 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    if (!!$resourceRelationshipDatastore && !groupID) [ groupID ] = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(originUserID, 'is-member');
+    if (!!$resourceRelationshipDatastore && !parentNodeID) [ parentNodeID ] = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(originUserID, 'is-member');
 
-    if (!groupID) throw new NucleusError(`Could not retrieve the group which the origin user (${originUserID}) is member of.`);
+    if (!parentNodeID) throw new NucleusError(`Could not retrieve the node which the origin user (${originUserID}) is member of.`);
 
     try {
-      const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
+      const reservedResourceID = resourceAttributes.ID;
+      Reflect.deleteProperty(resourceAttributes, 'ID');
+      Reflect.deleteProperty(resourceAttributes, 'meta');
+      const $resource = new NucleusResourceModel(resourceAttributes, originUserID, reservedResourceID);
       const resourceItemKey = $resource.generateOwnItemKey();
 
       return Promise.all([
@@ -63,11 +66,11 @@ class NucleusResourceAPI {
           if (!$resourceRelationshipDatastore) return;
 
           return Promise.all([
-            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject($resource.ID, 'is-member', groupID),
+            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject($resource.ID, 'is-member', parentNodeID),
             $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject($resource.ID, 'is-authored', originUserID)
           ]);
         })
-        .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberGroupID: groupID });
+        .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: parentNodeID });
     } catch (error) {
 
       throw new NucleusError(`Could not create ${resourceType} because of an external error: ${error}`, { error });
@@ -233,6 +236,9 @@ class NucleusResourceAPI {
         const updatedISOTime = new Date().toISOString();
         staleResourceAttributes.meta = Object.assign({ updatedISOTime }, staleResourceAttributes.meta);
 
+        Reflect.deleteProperty(resourceAttributes, 'ID');
+        Reflect.deleteProperty(resourceAttributes, 'meta');
+
         const $resource = new NucleusResourceModel(Object.assign({}, staleResourceAttributes, resourceAttributes), originUserID);
 
         $resource.meta.updatedISOTime = new Date().toISOString();
@@ -255,17 +261,17 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return { canRetrieveResource: true };
 
-    const userAncestorGroupIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, userID);
-    const userDirectAncestorChildrenGroupIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorGroupIDList[0]);
-    const resourceAncestorGroupIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
+    const userAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, userID);
+    const userDirectAncestorChildrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeIDList[0]);
+    const resourceAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
 
-    const groupIDIntersectionList = userAncestorGroupIDList.slice(0).concat(userDirectAncestorChildrenGroupIDList)
-      .filter((groupID) => {
+    const nodeIDIntersectionList = userAncestorNodeIDList.slice(0).concat(userDirectAncestorChildrenNodeIDList)
+      .filter((nodeID) => {
 
-        return resourceAncestorGroupIDList.indexOf(groupID) !== -1;
+        return resourceAncestorNodeIDList.indexOf(nodeID) !== -1;
       });
 
-    if (groupIDIntersectionList.length === 0) return { canRetrieveResource: false };
+    if (nodeIDIntersectionList.length === 0) return { canRetrieveResource: false };
 
     return { canRetrieveResource: true };
   }
@@ -283,17 +289,17 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return { canUpdateResource: true };
 
-    const userDirectAncestorGroupIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(userID, 'is-member');
-    const userDirectAncestorChildrenGroupIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorGroupIDList[0]);
-    const resourceAncestorGroupIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
+    const userDirectAncestorNodeIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(userID, 'is-member');
+    const userDirectAncestorChildrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeIDList[0]);
+    const resourceAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
 
-    const groupIDIntersectionList = userDirectAncestorGroupIDList.slice(0).concat(userDirectAncestorChildrenGroupIDList)
-      .filter((groupID) => {
+    const nodeIDIntersectionList = userDirectAncestorNodeIDList.slice(0).concat(userDirectAncestorChildrenNodeIDList)
+      .filter((nodeID) => {
 
-        return resourceAncestorGroupIDList.indexOf(groupID) !== -1;
+        return resourceAncestorNodeIDList.indexOf(nodeID) !== -1;
       });
 
-    if (groupIDIntersectionList.length === 0) return { canUpdateResource: false };
+    if (nodeIDIntersectionList.length === 0) return { canUpdateResource: false };
 
     return { canUpdateResource: true };
   }
@@ -311,35 +317,35 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return [];
 
-    const groupIDList = [];
+    const nodeIDList = [];
 
     async function retrieveAncestorForResourceByID (resourceID) {
-      const childrenGroupIDList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(resourceID, 'is-member');
+      const childrenNodeIDList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(resourceID, 'is-member');
 
-      if (childrenGroupIDList.length === 0 || !!~childrenGroupIDList.indexOf('SYSTEM')) return null;
+      if (childrenNodeIDList.length === 0 || !!~childrenNodeIDList.indexOf('SYSTEM')) return null;
 
-      childrenGroupIDList
-        .forEach((groupID) => {
-          if (!~groupIDList.indexOf(groupID)) groupIDList.push(groupID);
-        }, groupIDList);
+      childrenNodeIDList
+        .forEach((nodeID) => {
+          if (!~nodeIDList.indexOf(nodeID)) nodeIDList.push(nodeID);
+        }, nodeIDList);
 
-      if (groupIDList.length >= depth) return;
+      if (nodeIDList.length >= depth) return;
 
-      return Promise.all(childrenGroupIDList
+      return Promise.all(childrenNodeIDList
         .map(retrieveAncestorForResourceByID.bind(this)));
     }
 
     return new Promise(async (resolve, reject) => {
       await retrieveAncestorForResourceByID.call(this, resourceID);
 
-      resolve(groupIDList);
+      resolve(nodeIDList);
     });
   }
 
   /**
    * Recursively walks up all the branches of a given resource and collect every ancestors.
    *
-   * @argument {String} groupID
+   * @argument {String} nodeID
    * @argument {Number} [depth=Infinity]
    *
    * @returns {Promise<Array>}
@@ -347,28 +353,28 @@ class NucleusResourceAPI {
   static async walkHierarchyTreeUpward (resourceID, depth = Infinity) {
     const { $resourceRelationshipDatastore } = this;
 
-    const groupIDList = [];
+    const nodeIDList = [];
 
     async function retrieveAncestorForResourceByID (resourceID) {
-      const ancestorGroupIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(resourceID, 'is-member');
+      const ancestorNodeIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(resourceID, 'is-member');
 
-      if (ancestorGroupIDList.length === 0 || !!~ancestorGroupIDList.indexOf('SYSTEM')) return null;
+      if (ancestorNodeIDList.length === 0 || !!~ancestorNodeIDList.indexOf('SYSTEM')) return null;
 
-      ancestorGroupIDList
-        .forEach((groupID) => {
-          if (!~groupIDList.indexOf(groupID)) groupIDList.push(groupID);
-        }, groupIDList);
+      ancestorNodeIDList
+        .forEach((nodeID) => {
+          if (!~nodeIDList.indexOf(nodeID)) nodeIDList.push(nodeID);
+        }, nodeIDList);
 
-      if (groupIDList.length >= depth) return;
+      if (nodeIDList.length >= depth) return;
 
-      return Promise.all(ancestorGroupIDList
+      return Promise.all(ancestorNodeIDList
         .map(retrieveAncestorForResourceByID.bind(this)));
     }
 
     return new Promise(async (resolve, reject) => {
       await retrieveAncestorForResourceByID.call(this, resourceID);
 
-      resolve(groupIDList);
+      resolve(nodeIDList);
     });
   }
 }
