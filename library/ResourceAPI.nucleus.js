@@ -9,6 +9,11 @@ const NucleusResource = require('./Resource.nucleus');
 const nucleusValidator = require('./validator.nucleus');
 
 const RESOURCE_ID_BY_TYPE_TABLE_NAME = 'ResourceIDByType';
+const WALK_HIERARCHY_METHOD_LIST = [
+  'TopNodeDescent',
+  'CurrentNodeDescent',
+  'CurrentNode'
+];
 
 class NucleusResourceAPI {
 
@@ -26,6 +31,7 @@ class NucleusResourceAPI {
    * @argument {Function} NucleusResourceModel
    * @argument {Object} resourceAttributes
    * @argument {String} originUserID
+   * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
    * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberNodeID: String }>}
@@ -37,43 +43,55 @@ class NucleusResourceAPI {
    * @throws Will throw an error if no datastore is passed.
    * @throws Will throw an error if the resource is not conform to the model.
    */
-  static async createResource (resourceType, NucleusResourceModel, resourceAttributes, originUserID, parentNodeID) {
+  static async createResource (resourceType, NucleusResourceModel, resourceAttributes, originUserID, parentNodeType, parentNodeID) {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
     if (!nucleusValidator.isObject(resourceAttributes)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource attributes must be an object.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
+    if (!!parentNodeType && !parentNodeID) throw new NucleusError.UndefinedValueNucleusError("The parent node type is expected along with the parent node ID.");
+
     const { $datastore, $resourceRelationshipDatastore } = this;
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    if (!!$resourceRelationshipDatastore && !parentNodeID) [ parentNodeID ] = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(originUserID, 'is-member');
+    if (!$resourceRelationshipDatastore && (!parentNodeType || !parentNodeID)) throw new NucleusError(`Could not resolve the node which the origin user (${originUserID}) is member of.`);
 
-    if (!parentNodeID) throw new NucleusError(`Could not retrieve the node which the origin user (${originUserID}) is member of.`);
+    {
+      const [ parentNode ] = (!!$resourceRelationshipDatastore) ? await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member') : [];
 
-    try {
-      const reservedResourceID = resourceAttributes.ID;
-      Reflect.deleteProperty(resourceAttributes, 'ID');
-      Reflect.deleteProperty(resourceAttributes, 'meta');
-      const $resource = new NucleusResourceModel(resourceAttributes, originUserID, reservedResourceID);
-      const resourceItemKey = $resource.generateOwnItemKey();
+      if (!nucleusValidator.isEmpty(parentNode) && (!parentNodeType || !parentNodeID)) {
+        parentNodeType = parentNode.type;
+        parentNodeID = parentNode.ID;
+      }
 
-      return Promise.all([
-        $datastore.addItemToHashFieldByName(resourceItemKey, $resource),
-        $datastore.addItemToSetByName(RESOURCE_ID_BY_TYPE_TABLE_NAME, resourceType, $resource.ID),
-      ])
-        .then(() => {
-          if (!$resourceRelationshipDatastore) return;
+      if (!parentNodeType || !parentNodeID) throw new NucleusError(`Could not retrieve the node which the origin user (${originUserID}) is member of.`);
 
-          return Promise.all([
-            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject($resource.ID, 'is-member', parentNodeID),
-            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject($resource.ID, 'is-authored', originUserID)
-          ]);
-        })
-        .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: parentNodeID });
-    } catch (error) {
+      try {
+        const reservedResourceID = resourceAttributes.ID;
+        Reflect.deleteProperty(resourceAttributes, 'ID');
+        Reflect.deleteProperty(resourceAttributes, 'meta');
+        const $resource = new NucleusResourceModel(resourceAttributes, originUserID, reservedResourceID);
+        const resourceItemKey = $resource.generateOwnItemKey();
 
-      throw new NucleusError(`Could not create ${resourceType} because of an external error: ${error}`, { error });
+        return Promise.all([
+          $datastore.addItemToHashFieldByName(resourceItemKey, $resource),
+          $datastore.addItemToSetByName(RESOURCE_ID_BY_TYPE_TABLE_NAME, resourceType, $resource.ID),
+        ])
+          .then(() => {
+            if (!$resourceRelationshipDatastore) return;
+
+            return Promise.all([
+              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-member', `${parentNodeType}-${parentNodeID}`),
+              // I am assuming the type of user... That could be changed eventually.
+              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored', `User-${originUserID}`)
+            ]);
+          })
+          .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: parentNodeID });
+      } catch (error) {
+
+        throw new NucleusError(`Could not create ${resourceType} because of an external error: ${error}`, { error });
+      }
     }
   }
 
@@ -109,7 +127,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceID);
+    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
 
     if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to remove the ${resourceType} ("${resourceID}")`);
 
@@ -165,7 +183,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call(this, originUserID, resourceID);
+    const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call(this, originUserID, resourceType, resourceID);
 
     if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve the ${resourceType} ("${resourceID}")`);
 
@@ -180,6 +198,139 @@ class NucleusResourceAPI {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
 
         return { resource: $resource };
+      });
+  }
+
+  /**
+   * Retrieves all the resources given its type.
+   * This is done base on the hierarchy of resources and the origin user ID.
+   *
+   * @argument {String} nodeType
+   * @argument {String} originUserID
+   * @argument {walkHierarchyTreeMethod} [originUserID]=[TopNodeDescent,CurrentNodeDescent,CurrentNode]
+   *
+   * @returns {Promise<{ resourceList: Node[] }>}
+   */
+  static async retrieveAllNodesByType (nodeType, originUserID, walkHierarchyTreeMethod = 'TopNodeDescent') {
+    if (!nucleusValidator.isString(walkHierarchyTreeMethod) || !~WALK_HIERARCHY_METHOD_LIST.indexOf(walkHierarchyTreeMethod)) throw new NucleusError.UnexpectedValueTypeNucleusError(`The walk hierarchy method ("${walkHierarchyTreeMethod}") is not a valid method.`);
+
+    const { $resourceRelationshipDatastore } = this;
+    const anchorNodeIsList = [];
+
+    switch (walkHierarchyTreeMethod) {
+      case 'TopNodeDescent':
+      {
+        const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `User-${originUserID}`);
+        const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
+
+        userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
+          .forEach(anchorNodeIsList.push.bind(anchorNodeIsList));
+
+      }
+        break;
+
+      case 'CurrentNodeDescent':
+      {
+        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member');
+        const userCurrentNodeChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userCurrentNodeList[0]);
+
+        userCurrentNodeList.slice(0).concat(userCurrentNodeChildrenNodeList)
+          .forEach(anchorNodeIsList.push.bind(anchorNodeIsList));
+      }
+        break;
+
+      case 'CurrentNodeDescent':
+      {
+        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member');
+
+        anchorNodeIsList.push(userCurrentNodeList);
+      }
+        break;
+
+      default:
+        throw new NucleusError.UnexpectedValueNucleusError(`"${walkHierarchyTreeMethod}" is not a valid walking method of the hierarchy tree.`);
+    }
+
+    return Promise.all(anchorNodeIsList
+      .map(anchorNodeID => $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNodeByID.call(this, nodeType, anchorNodeID, 'is-member', originUserID)))
+      .then((childrenNodeListList) => {
+
+        return childrenNodeListList
+          .reduce((accumulator, childrenNodeList) => {
+            accumulator = accumulator.concat(childrenNodeList);
+
+            return accumulator;
+          }, []);
+      });
+  }
+
+  /**
+   * Retrieves all the resources based on its relationship with the object.
+   *
+   * @argument {String} resourceType
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} objectResourceID
+   * @argument {String} relationshipPredicate
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<{ resourceList: Node[] }>}
+   */
+  static retrieveAllNodesByRelationshipWithNodeByID (objectNodeType, objectNodeID, relationshipPredicate, originUserID) {
+    const { $resourceRelationshipDatastore } = this;
+
+    return $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(`${objectNodeType}-${objectNodeID}`, relationshipPredicate)
+      .then((nodeList) => {
+
+        return Promise.all(nodeList
+          .map(async (node) => {
+            const { ID: resourceID, type: resourceType } = node;
+
+            const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource(originUserID, resourceType, resourceID);
+
+            if (!canRetrieveResource) return;
+
+            return node;
+          }))
+          .then((nodeList) => {
+
+            return nodeList.filter(node => !!node);
+          });
+      });
+  }
+
+  /**
+   * Updates a resource given its ID.
+   *
+   * @Nucleus ActionName RetrieveAllResourcesByType
+   * @Nucleus ActionAlternativeSignature resourceType originUserID
+   * @Nucleus ExtendableActionName `RetrieveAll${pluralResourceType}`
+   * @Nucleus ExtendableEventName `All${pluralResourceType}Retrieved`
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
+   *
+   * @argument {String} resourceType
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} originUserID
+   * @argument {String} walkHierarchyTreeMethod
+   *
+   * @returns {Promise<{ resource: NucleusResource }>}
+   *
+   * @throws Will throw an error if the resource type is not a string.
+   * @throws Will throw an error if the origin user ID is not a string.
+   * @throws Will throw an error if the walk hierarchy tree method not a string or is not a valid method.
+   * @throws Will throw an error if no datastore is passed.
+   */
+  static retrieveAllResourcesByType (resourceType, NucleusResourceModel, originUserID, walkHierarchyTreeMethod = 'TopNodeDescent') {
+    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
+    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
+    return NucleusResourceAPI.retrieveAllNodesByType(resourceType, originUserID, walkHierarchyTreeMethod)
+      .then((nodeList) => {
+
+        return Promise.all(nodeList
+          .map(({ ID: nodeID, type: nodeType }) => {
+
+            return NucleusResourceAPI.retrieveResourceByID(nodeType, NucleusResourceModel, nodeID, originUserID);
+          }));
       });
   }
 
@@ -221,7 +372,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceID);
+    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
 
     if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
 
@@ -249,6 +400,12 @@ class NucleusResourceAPI {
   }
 
   /**
+   * @typedef {Object} Node - Represents a node in a hierarchy tree.
+   * @property {String} ID
+   * @property {String} type
+   */
+
+  /**
    * Verifies that the user can retrieve a given resource based on the hierarchy.
    *
    * @argument userID
@@ -256,19 +413,24 @@ class NucleusResourceAPI {
    *
    * @returns {Promise<{ canRetrieveResource: Boolean }>}
    */
-  static async verifyThatUserCanRetrieveResource (userID, resourceID) {
+  static async verifyThatUserCanRetrieveResource (userID, resourceType, resourceID) {
     const { $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return { canRetrieveResource: true };
 
-    const userAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, userID);
-    const userDirectAncestorChildrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeIDList[0]);
-    const resourceAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
+    const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `User-${userID}`);
+    const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
+    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `${resourceType}-${resourceID}`);
 
-    const nodeIDIntersectionList = userAncestorNodeIDList.slice(0).concat(userDirectAncestorChildrenNodeIDList)
-      .filter((nodeID) => {
+    const nodeIDIntersectionList = userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
+      .filter((node) => {
 
-        return resourceAncestorNodeIDList.indexOf(nodeID) !== -1;
+        return resourceAncestorNodeList
+          .reduce((accumulator, ancestorNode) => {
+            if (ancestorNode.ID === node.ID) accumulator.push(node);
+
+            return accumulator;
+          }, []).length > 0;
       });
 
     if (nodeIDIntersectionList.length === 0) return { canRetrieveResource: false };
@@ -284,19 +446,24 @@ class NucleusResourceAPI {
    *
    * @returns {Promise<{ canUpdateResource: Boolean }>}
    */
-  static async verifyThatUserCanUpdateResource (userID, resourceID) {
+  static async verifyThatUserCanUpdateResource (userID, resourceType, resourceID) {
     const { $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return { canUpdateResource: true };
 
-    const userDirectAncestorNodeIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(userID, 'is-member');
-    const userDirectAncestorChildrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeIDList[0]);
-    const resourceAncestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, resourceID);
+    const userDirectAncestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${userID}`, 'is-member');
+    const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeList[0]);
+    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `${resourceType}-${resourceID}`);
 
-    const nodeIDIntersectionList = userDirectAncestorNodeIDList.slice(0).concat(userDirectAncestorChildrenNodeIDList)
-      .filter((nodeID) => {
+    const nodeIDIntersectionList = userDirectAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
+      .filter((node) => {
 
-        return resourceAncestorNodeIDList.indexOf(nodeID) !== -1;
+        return resourceAncestorNodeList
+          .reduce((accumulator, ancestorNode) => {
+            if (ancestorNode.ID === node.ID) accumulator.push(node);
+
+            return accumulator;
+          }, []).length > 0;
       });
 
     if (nodeIDIntersectionList.length === 0) return { canUpdateResource: false };
@@ -310,35 +477,41 @@ class NucleusResourceAPI {
    * @argument {String} resourceID
    * @argument {Number} [depth=Infinity]
    *
-   * @returns {Promise<Array>}
+   * @returns {Promise<String[]>}
    */
-  static async walkHierarchyTreeDownward (resourceID, depth = Infinity) {
+  static async walkHierarchyTreeDownward (nodeID, depth = Infinity) {
     const { $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return [];
 
+    const nodeList = [];
     const nodeIDList = [];
 
-    async function retrieveAncestorForResourceByID (resourceID) {
-      const childrenNodeIDList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(resourceID, 'is-member');
+    async function retrieveAncestorForNodeByID (nodeID) {
+      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(nodeID, 'is-member');
 
-      if (childrenNodeIDList.length === 0 || !!~childrenNodeIDList.indexOf('SYSTEM')) return null;
+      if (childrenNodeList.length === 0 || !!~childrenNodeList.indexOf('SYSTEM')) return null;
 
-      childrenNodeIDList
-        .forEach((nodeID) => {
-          if (!~nodeIDList.indexOf(nodeID)) nodeIDList.push(nodeID);
-        }, nodeIDList);
+      childrenNodeList
+        .forEach((node) => {
+          const { ID: nodeID } = node;
 
-      if (nodeIDList.length >= depth) return;
+          if (!~nodeIDList.indexOf(nodeID)) {
+            nodeList.push(node);
+            nodeIDList.push(nodeID);
+          }
+        }, nodeList);
 
-      return Promise.all(childrenNodeIDList
-        .map(retrieveAncestorForResourceByID.bind(this)));
+      if (nodeList.length >= depth) return;
+
+      return Promise.all(childrenNodeList
+        .map(retrieveAncestorForNodeByID.bind(this)));
     }
 
-    return new Promise(async (resolve, reject) => {
-      await retrieveAncestorForResourceByID.call(this, resourceID);
+    return new Promise(async (resolve) => {
+      await retrieveAncestorForNodeByID.call(this, nodeID);
 
-      resolve(nodeIDList);
+      resolve(nodeList);
     });
   }
 
@@ -348,33 +521,39 @@ class NucleusResourceAPI {
    * @argument {String} nodeID
    * @argument {Number} [depth=Infinity]
    *
-   * @returns {Promise<Array>}
+   * @returns {Promise<Node[]>}
    */
-  static async walkHierarchyTreeUpward (resourceID, depth = Infinity) {
+  static async walkHierarchyTreeUpward (nodeID, depth = Infinity) {
     const { $resourceRelationshipDatastore } = this;
 
+    const nodeList = [];
     const nodeIDList = [];
 
-    async function retrieveAncestorForResourceByID (resourceID) {
-      const ancestorNodeIDList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(resourceID, 'is-member');
+    async function retrieveAncestorForNodeByID (nodeID) {
+      const ancestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(nodeID, 'is-member');
 
-      if (ancestorNodeIDList.length === 0 || !!~ancestorNodeIDList.indexOf('SYSTEM')) return null;
+      if (ancestorNodeList.length === 0 || !!~ancestorNodeList.indexOf('SYSTEM')) return null;
 
-      ancestorNodeIDList
-        .forEach((nodeID) => {
-          if (!~nodeIDList.indexOf(nodeID)) nodeIDList.push(nodeID);
-        }, nodeIDList);
+      ancestorNodeList
+        .forEach((node) => {
+          const { ID: nodeID } = node;
 
-      if (nodeIDList.length >= depth) return;
+          if (!~nodeIDList.indexOf(nodeID)) {
+            nodeList.push(node);
+            nodeIDList.push(nodeID);
+          }
+        }, nodeList);
 
-      return Promise.all(ancestorNodeIDList
-        .map(retrieveAncestorForResourceByID.bind(this)));
+      if (nodeList.length >= depth) return;
+
+      return Promise.all(ancestorNodeList
+        .map(retrieveAncestorForNodeByID.bind(this)));
     }
 
-    return new Promise(async (resolve, reject) => {
-      await retrieveAncestorForResourceByID.call(this, resourceID);
+    return new Promise(async (resolve) => {
+      await retrieveAncestorForNodeByID.call(this, nodeID);
 
-      resolve(nodeIDList);
+      resolve(nodeList);
     });
   }
 }

@@ -954,11 +954,12 @@ class NucleusEngine {
       const evaluatedString = new Function('Nucleus', 'context', `
       const { ${propertyList.join(', ')} } = context;
     
-      return ${string}
+      return ${string};
     `)(Nucleus, context);
 
       return evaluatedString;
     } catch (error) {
+      console.log(propertyList, string);
 
       throw new NucleusError(`Could not parse template string: "${string}" because of an external error.`, { error });
     }

@@ -1,6 +1,8 @@
 "use strict";
 
 const NucleusDatastore = require('./Datastore.nucleus');
+const NucleusError = require('./Error.nucleus');
+const nucleusValidator = require('./validator.nucleus');
 
 class NucleusResourceRelationshipDatastore {
 
@@ -43,6 +45,8 @@ class NucleusResourceRelationshipDatastore {
    * @returns {Promise<void>}
    */
   createRelationshipBetweenSubjectAndObject (subject, predicate, object) {
+    if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${subject}"`);
+    if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${object}"`);
 
     return this.$datastore.addTripleToHexastore('ResourceRelationship', subject, predicate, object);
   }
@@ -59,6 +63,26 @@ class NucleusResourceRelationshipDatastore {
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
   }
 
+  retrieveAllNodesByTypeForAnchorNodeByID (nodeType, anchorNode) {
+    if (nucleusValidator.isObject(anchorNode)) {
+      const stringifiedAnchorNode = `${anchorNode.type}-${anchorNode.ID}`;
+
+      return this.retrieveAllNodesByTypeForAnchorNodeByID(nodeType, stringifiedAnchorNode);
+    }
+
+    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[OPS:${anchorNode}:is-member:${nodeType}-`, `[OPS:${anchorNode}:is-member:${nodeType}-\xff`)
+      .then((itemList = []) => {
+
+        return itemList
+          .map((item) => {
+            const [ indexScheme, vectorA, vectorB, vectorC ] = item.split(':');
+
+            return vectorC;
+          });
+      })
+      .then(this.parseNode.bind(this));
+  }
+
   /**
    * Retrieves the object of a subject's relationship.
    *
@@ -68,8 +92,16 @@ class NucleusResourceRelationshipDatastore {
    * @returns {Promise<Array>}
    */
   retrieveObjectOfRelationshipWithSubject (subject, predicate) {
+    if (nucleusValidator.isObject(subject)) {
+      const stringifiedSubject = `${subject.type}-${subject.ID}`;
 
-    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'SPO', subject, predicate);
+      return this.retrieveObjectOfRelationshipWithSubject(stringifiedSubject, predicate);
+    }
+
+    if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${subject}"`);
+
+    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'SPO', subject, predicate)
+      .then(this.parseNode.bind(this));
   }
 
   /**
@@ -81,8 +113,43 @@ class NucleusResourceRelationshipDatastore {
    * @returns {Promise<Array>}
    */
   retrieveSubjectOfRelationshipWithObject (object, predicate) {
+    if (nucleusValidator.isObject(object)) {
+      const stringifiedObject = `${object.type}-${object.ID}`;
 
-    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'OPS', object, predicate);
+      return this.retrieveSubjectOfRelationshipWithObject(stringifiedObject, predicate);
+    }
+
+    if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${object}"`);
+
+    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'OPS', object, predicate)
+      .then(this.parseNode.bind(this));
+  }
+
+  parseNode (node) {
+    if (nucleusValidator.isArray(node)) {
+      const nodeList = node;
+
+      return Promise.all(nodeList.map(this.parseNode.bind(this)));
+    }
+    if (node === 'SYSTEM') return node;
+    console.log(node);
+    const $$nodeTypeNodeIDRegularExpression = new RegExp(`^(${nucleusValidator.pascalCaseRegularExpression})-(${nucleusValidator.UUIDRegularExpression})|SYSTEM$`);
+    const [ matchedString, nodeType, nodeID ] = node.match($$nodeTypeNodeIDRegularExpression);
+
+    return { type: nodeType, ID: nodeID };
+  }
+
+  /**
+   * Validates that a vector is a resource type and a resource ID.
+   *
+   * @argument {String} vector
+   *
+   * @returns {Boolean}
+   */
+  validateVectorFormat (vector) {
+    const $$pascalCaseAndUUIDRegularExpression = new RegExp(`^(${nucleusValidator.pascalCaseRegularExpression}-${nucleusValidator.UUIDRegularExpression})|SYSTEM$`);
+
+    return $$pascalCaseAndUUIDRegularExpression.test(vector);
   }
 
 }
