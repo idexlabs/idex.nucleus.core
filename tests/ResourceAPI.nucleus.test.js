@@ -449,7 +449,7 @@ mocha.suite("Nucleus Resource API", function () {
           });
       });
 
-      mocha.test.only("The dummy resource is created by default in the group of the author user.", function () {
+      mocha.test.skip("The dummy resource is created by default in the group of the author user.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const dummyAttributes = {
@@ -458,7 +458,7 @@ mocha.suite("Nucleus Resource API", function () {
         const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
-          .to.eventually.deep.members({ resourceRelationshipList: [
+          .to.eventually.deep.property({ resourceRelationshipList: [
               {},
               {
                 relationship: 'is-member',

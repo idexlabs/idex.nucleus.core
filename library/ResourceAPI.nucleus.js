@@ -34,7 +34,7 @@ class NucleusResourceAPI {
    * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberResourceID: String }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceRelationshipList: { relationship: String, resourceID: String, resourceType: String }[] }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -325,7 +325,7 @@ class NucleusResourceAPI {
    * Updates a resource given its ID.
    *
    * @Nucleus ActionName RetrieveAllResourcesByType
-   * @Nucleus ActionAlternativeSignature resourceType originUserID
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel originUserID
    * @Nucleus ExtendableActionName `RetrieveAll${pluralResourceType}`
    * @Nucleus ExtendableEventName `All${pluralResourceType}Retrieved`
    * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
@@ -333,9 +333,9 @@ class NucleusResourceAPI {
    * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel
    * @argument {String} originUserID
-   * @argument {String} walkHierarchyTreeMethod
+   * @argument {String} [walkHierarchyTreeMethod]
    *
-   * @returns {Promise<{ resource: NucleusResource }>}
+   * @returns {Promise<{ resourceList: NucleusResource[] }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the origin user ID is not a string.
@@ -346,14 +346,18 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    return NucleusResourceAPI.retrieveAllNodesByType(resourceType, originUserID, walkHierarchyTreeMethod)
+    return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
 
         return Promise.all(nodeList
           .map(({ ID: nodeID, type: nodeType }) => {
 
-            return NucleusResourceAPI.retrieveResourceByID(nodeType, NucleusResourceModel, nodeID, originUserID);
+            return NucleusResourceAPI.retrieveResourceByID.call(this, nodeType, NucleusResourceModel, nodeID, originUserID);
           }));
+      })
+      .then((resourceList) => {
+
+        return { resourceList };
       });
   }
 
