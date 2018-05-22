@@ -1,3 +1,5 @@
+"use strict";
+
 class DeferredClass {
 
   constructor (name) {
@@ -23,12 +25,4 @@ class DeferredClass {
 
 }
 
-const dc = new DeferredClass('Dummy');
-
-console.log(dc.name);
-console.log(dc.pouetpouet);
-
-Promise.all([dc])
-  .then(console.log.bind(console, 'DONE'))
-  .catch(console.error)
-  .then(process.exit);
+module.exports = DeferredClass;

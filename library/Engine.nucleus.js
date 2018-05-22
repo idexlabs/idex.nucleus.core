@@ -318,8 +318,8 @@ class NucleusEngine {
 
           const actionToExtendContext = require(actionConfiguration.filePath);
 
-          if ('extendableAlternativeActionSignature' in extendableActionConfiguration) {
-            const extendedActionSignature = extendableActionConfiguration.extendableAlternativeActionSignature
+          if ('extendableActionAlternativeSignature' in extendableActionConfiguration) {
+            const extendedActionSignature = extendableActionConfiguration.extendableActionAlternativeSignature
               .map(NucleusEngine.parseTemplateString.bind(null, Object.assign({}, actionMessage, actionToExtendContext)));
 
             actionSignatureList.push(extendedActionSignature);
@@ -756,7 +756,7 @@ class NucleusEngine {
      * @property {String[]} [alternativeActionSignature]
      * @property {String[]} [actionSignature]
      * @property {Object} [argumentConfigurationByArgumentName]
-     * @property {String[]} [extendableAlternativeActionSignature]
+     * @property {String[]} [extendableActionAlternativeSignature]
      * @property {String} extendableActionName
      * @property {String} [extendableEventName]
      * @property {String} contextName=Self
@@ -959,7 +959,6 @@ class NucleusEngine {
 
       return evaluatedString;
     } catch (error) {
-      console.log(propertyList, string);
 
       throw new NucleusError(`Could not parse template string: "${string}" because of an external error.`, { error });
     }

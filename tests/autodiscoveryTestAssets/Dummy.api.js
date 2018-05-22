@@ -25,7 +25,7 @@ const resourceType = 'Dummy';
  * @Nucleus ActionName ExtendResource
  * @Nucleus ExtendableActionName `Extend{resourceType}`
  * @Nucleus ExtendableEventName `${resourceType}Extended`
- * @Nucleus ExtendableAlternativeActionSignature AID2 AID3
+ * @Nucleus ExtendableActionAlternativeSignature AID2 AID3
  * @Nucleus ActionArgumentDefault AID1 '85b4a289-8a31-428b-9c7a-dea7538cb117'
  *
  * @argument {String} AID1

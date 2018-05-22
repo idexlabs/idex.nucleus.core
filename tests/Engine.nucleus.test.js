@@ -275,7 +275,7 @@ mocha.suite('Nucleus Engine', function () {
             actionName: 'ExtendResource',
             extendableActionName: '`Extend${resourceType}`',
             extendableEventName: '`${resourceType}Extended`',
-            extendableAlternativeActionSignature: [ '\'AID1\'', '\'AID4\'', '\'AID3\'' ],
+            extendableActionAlternativeSignature: [ '\'AID1\'', '\'AID4\'', '\'AID3\'' ],
             actionSignature: [ 'AID1', 'AID2', 'AID3' ],
             argumentConfigurationByArgumentName: {
               AID1: 'string',

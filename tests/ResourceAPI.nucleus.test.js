@@ -640,7 +640,7 @@ mocha.suite("Nucleus Resource API", function () {
         ]);
       });
 
-      mocha.test("Hello", function () {
+      mocha.test("The nodes are retrieved based on the user ID hierarchical position.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';

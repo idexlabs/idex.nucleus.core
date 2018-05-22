@@ -56,18 +56,48 @@ class NucleusResourceRelationshipDatastore {
    *
    * @argument {String} vector
    *
-   * @returns {Promise<void>}
+   * @returns {Promise<Object[]>}
    */
   removeAllRelationshipsToVector (vector) {
 
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
   }
 
-  retrieveAllNodesByTypeForAnchorNodeByID (nodeType, anchorNode) {
+  retrieveAllRelationshipsForSubject (subject) {
+    if (nucleusValidator.isObject(subject)) {
+      const stringifiedAnchorNode = `${subject.type}-${subject.ID}`;
+
+      return this.retrieveAllRelationshipsForSubject(subject, stringifiedAnchorNode);
+    }
+
+    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[OPS:${subject}:\xff`)
+      .then((itemList = []) => {
+
+        return itemList
+          .map((item) => {
+            const [ indexScheme, subject, predicate, object ] = item.split(':');
+
+            return {
+              predicate,
+              object: this.parseNode(object)
+            };
+          });
+      });
+  }
+
+  /**
+   * Retrieves all nodes by type for an anchor node given its ID.
+   *
+   * @argument {String} nodeType
+   * @argument {String|Node} anchorNode
+   *
+   * @returns {Promise<Node[]>}
+   */
+  retrieveAllNodesByTypeForAnchorNode (nodeType, anchorNode) {
     if (nucleusValidator.isObject(anchorNode)) {
       const stringifiedAnchorNode = `${anchorNode.type}-${anchorNode.ID}`;
 
-      return this.retrieveAllNodesByTypeForAnchorNodeByID(nodeType, stringifiedAnchorNode);
+      return this.retrieveAllNodesByTypeForAnchorNode(nodeType, stringifiedAnchorNode);
     }
 
     return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[OPS:${anchorNode}:is-member:${nodeType}-`, `[OPS:${anchorNode}:is-member:${nodeType}-\xff`)
@@ -125,6 +155,13 @@ class NucleusResourceRelationshipDatastore {
       .then(this.parseNode.bind(this));
   }
 
+  /**
+   * Parses a string node to an object node.
+   *
+   * @argument {String} node
+   *
+   * @returns {{ type: String, ID: string }}
+   */
   parseNode (node) {
     if (nucleusValidator.isArray(node)) {
       const nodeList = node;
@@ -132,7 +169,6 @@ class NucleusResourceRelationshipDatastore {
       return Promise.all(nodeList.map(this.parseNode.bind(this)));
     }
     if (node === 'SYSTEM') return node;
-    console.log(node);
     const $$nodeTypeNodeIDRegularExpression = new RegExp(`^(${nucleusValidator.pascalCaseRegularExpression})-(${nucleusValidator.UUIDRegularExpression})|SYSTEM$`);
     const [ matchedString, nodeType, nodeID ] = node.match($$nodeTypeNodeIDRegularExpression);
 

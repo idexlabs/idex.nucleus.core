@@ -58,14 +58,14 @@ class NucleusResourceAPI {
     if (!$resourceRelationshipDatastore && (!parentNodeType || !parentNodeID)) throw new NucleusError(`Could not resolve the node which the origin user (${originUserID}) is member of.`);
 
     {
-      const [ parentNode ] = (!!$resourceRelationshipDatastore) ? await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member') : [];
+      const [ parentNode ] = (!!$resourceRelationshipDatastore && (!parentNodeID || !parentNodeType)) ? await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member') : [ { ID: parentNodeID, type: parentNodeType } ];
 
       if (!nucleusValidator.isEmpty(parentNode) && (!parentNodeType || !parentNodeID)) {
         parentNodeType = parentNode.type;
         parentNodeID = parentNode.ID;
       }
 
-      if (!parentNodeType || !parentNodeID) throw new NucleusError(`Could not retrieve the node which the origin user (${originUserID}) is member of.`);
+      if ((!parentNodeType || !parentNodeID) && parentNode !== 'SYSTEM') throw new NucleusError(`Could not retrieve the node which the origin user (${originUserID}) is member of.`);
 
       try {
         const reservedResourceID = resourceAttributes.ID;
@@ -82,12 +82,12 @@ class NucleusResourceAPI {
             if (!$resourceRelationshipDatastore) return;
 
             return Promise.all([
-              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-member', `${parentNodeType}-${parentNodeID}`),
+              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-member', (parentNode === 'SYSTEM') ? 'SYSTEM' : `${parentNodeType}-${parentNodeID}`),
               // I am assuming the type of user... That could be changed eventually.
               $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored', `User-${originUserID}`)
             ]);
           })
-          .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: parentNodeID });
+          .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID });
       } catch (error) {
 
         throw new NucleusError(`Could not create ${resourceType} because of an external error: ${error}`, { error });
