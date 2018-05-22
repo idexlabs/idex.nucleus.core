@@ -441,15 +441,15 @@ mocha.suite("Nucleus Resource API", function () {
         const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
 
         return NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID)
-          .then(({ resource, resourceAuthorID, resourceMemberNodeID }) => {
+          .then(({ resource, resourceRelationshipList }) => {
             chai.expect(resource).to.be.an.instanceOf(NucleusResource);
             chai.expect(resource).to.deep.include(dummyAttributes);
-            chai.expect(resourceAuthorID).to.equal(authorUserID);
-            chai.expect(resourceMemberNodeID).to.equal(groupID);
+            chai.expect(resourceRelationshipList[0].resourceID).to.equal(authorUserID);
+            chai.expect(resourceRelationshipList[1].resourceID).to.equal(groupID);
           });
       });
 
-      mocha.test("The dummy resource is created by default in the group of the author user.", function () {
+      mocha.test.only("The dummy resource is created by default in the group of the author user.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const dummyAttributes = {
@@ -458,7 +458,13 @@ mocha.suite("Nucleus Resource API", function () {
         const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
-          .to.eventually.deep.include({ resourceMemberNodeID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5' });
+          .to.eventually.deep.members({ resourceRelationshipList: [
+              {},
+              {
+                relationship: 'is-member',
+                resourceID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'
+              }
+            ] });
       });
 
       mocha.test.skip("The resource can reserve its own ID.", function () {

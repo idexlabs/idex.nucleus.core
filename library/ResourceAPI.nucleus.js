@@ -34,7 +34,7 @@ class NucleusResourceAPI {
    * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberNodeID: String }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceAuthorID: String, resourceMemberResourceID: String }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -87,7 +87,19 @@ class NucleusResourceAPI {
               $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored', `User-${originUserID}`)
             ]);
           })
-          .return({ resource: $resource, resourceAuthorID: originUserID, resourceMemberNodeID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID });
+          .return({ resource: $resource, resourceRelationshipList: [
+              {
+                relationship: 'is-authored',
+                resourceID: originUserID,
+                resourceType: 'User'
+              },
+              {
+                relationship: 'is-member',
+                resourceID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID,
+                resourceType: parentNodeType || 'SYSTEM'
+              }
+            ]
+          });
       } catch (error) {
 
         throw new NucleusError(`Could not create ${resourceType} because of an external error: ${error}`, { error });
@@ -179,7 +191,7 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isString(resourceID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    const { $datastore } = this;
+    const { $datastore, $resourceRelationshipDatastore } = this;
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
@@ -193,11 +205,22 @@ class NucleusResourceAPI {
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
-    return $datastore.retrieveAllItemsFromHashByName(resourceItemKey)
-      .then((resourceAttributes) => {
+    return Promise.all([
+      $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
+      $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode({
+        ID: resourceID,
+        type: resourceType
+      })
+    ])
+      .then(([ resourceAttributes, nodeRelationshipList ]) => {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
+        const resourceRelationshipList = nodeRelationshipList
+          .map(({ predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
 
-        return { resource: $resource };
+            return { relationship, resourceID, resourceType };
+          });
+
+        return { resource: $resource, resourceRelationshipList };
       });
   }
 
