@@ -252,7 +252,7 @@ class NucleusResourceAPI {
     }
 
     return Promise.all(anchorNodeIsList
-      .map(anchorNodeID => $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNodeByID.call(this, nodeType, anchorNodeID, 'is-member', originUserID)))
+      .map(anchorNodeID => $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode.call(this, nodeType, anchorNodeID, 'is-member', originUserID)))
       .then((childrenNodeListList) => {
 
         return childrenNodeListList
