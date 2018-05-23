@@ -363,6 +363,14 @@ mocha.suite('Nucleus Engine', function () {
         chai.expect(dummy).to.be.an('object');
       });
 
+      mocha.test("The response promise can be used like a bluebird promise.", function () {
+        const { $engine } = this;
+        const userID = uuid.v4();
+
+        return $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', { iam: 'special' }, userID)
+          .tap(console.log);
+      });
+
     });
 
     mocha.suite.skip("Load testing", function () {

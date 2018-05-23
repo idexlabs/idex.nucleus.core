@@ -106,7 +106,8 @@ class NucleusEngine {
     // Execute everything needed during the initialization phase of the engine.
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
       .then(this.verifyRedisConfiguration.bind(this))
-      .then(() => { return this.$datastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName); })
+      .then(this.$datastore.createItem.bind(this.$datastore, 'EngineName', this.name))
+      .then(() => { return this.$actionDatastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName); })
       // If the `automaticallyAutodiscover` flag is true, pass the engine directory path that should be set from the parent class.
       .then(() => { if (automaticallyAutodiscover) return this.autodiscover(this.engineDirectoryPath); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
@@ -242,8 +243,6 @@ class NucleusEngine {
           filePath: path.join(doclet.meta.path, doclet.meta.filename),
         }, nucleusTagsByName);
       });
-
-    await this.$actionDatastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName);
 
     await this.storeActionConfiguration(actionConfigurationList);
 
@@ -547,7 +546,7 @@ class NucleusEngine {
 
     const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
-    return new Promise(async (resolve, reject) => {
+    const $$actionResponsePromise = new Promise(async (resolve, reject) => {
       const actionItemKey = $action.generateOwnItemKey();
 
       const actionDatastoreIndex = this.$actionDatastore.index;
@@ -589,6 +588,8 @@ class NucleusEngine {
         reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
       }
     });
+
+    return Promise.resolve($$actionResponsePromise);
   }
 
   /**

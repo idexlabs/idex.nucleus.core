@@ -63,14 +63,21 @@ class NucleusResourceRelationshipDatastore {
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
   }
 
+  /**
+   * Retrieves all the relationship for a given subject node.
+   *
+   * @argument {String|Node} subject
+   *
+   * @returns {Promise<{ predicate: String, object: Node }>}
+   */
   retrieveAllRelationshipsForSubject (subject) {
     if (nucleusValidator.isObject(subject)) {
       const stringifiedAnchorNode = `${subject.type}-${subject.ID}`;
 
-      return this.retrieveAllRelationshipsForSubject(subject, stringifiedAnchorNode);
+      return this.retrieveAllRelationshipsForSubject(stringifiedAnchorNode);
     }
 
-    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[OPS:${subject}:\xff`)
+    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[SPO:${subject}:\xff`)
       .then((itemList = []) => {
 
         return itemList

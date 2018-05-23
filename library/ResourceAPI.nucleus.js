@@ -34,7 +34,7 @@ class NucleusResourceAPI {
    * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceRelationshipList: { relationship: String, resourceID: String, resourceType: String }[] }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceRelationshipList: Object[] }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -207,7 +207,7 @@ class NucleusResourceAPI {
 
     return Promise.all([
       $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
-      $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode({
+      $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
         ID: resourceID,
         type: resourceType
       })
