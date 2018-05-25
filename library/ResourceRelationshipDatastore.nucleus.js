@@ -107,7 +107,7 @@ class NucleusResourceRelationshipDatastore {
       return this.retrieveAllNodesByTypeForAnchorNode(nodeType, stringifiedAnchorNode);
     }
 
-    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[OPS:${anchorNode}:is-member:${nodeType}-`, `[OPS:${anchorNode}:is-member:${nodeType}-\xff`)
+    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[OPS:${anchorNode}:is-member-of:${nodeType}-`, `[OPS:${anchorNode}:is-member-of:${nodeType}-\xff`)
       .then((itemList = []) => {
 
         return itemList

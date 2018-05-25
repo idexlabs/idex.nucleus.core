@@ -58,7 +58,7 @@ class NucleusResourceAPI {
     if (!$resourceRelationshipDatastore && (!parentNodeType || !parentNodeID)) throw new NucleusError(`Could not resolve the node which the origin user (${originUserID}) is member of.`);
 
     {
-      const [ parentNode ] = (!!$resourceRelationshipDatastore && (!parentNodeID || !parentNodeType)) ? await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member') : [ { ID: parentNodeID, type: parentNodeType } ];
+      const [ parentNode ] = (!!$resourceRelationshipDatastore && (!parentNodeID || !parentNodeType)) ? await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of') : [ { ID: parentNodeID, type: parentNodeType } ];
 
       if (!nucleusValidator.isEmpty(parentNode) && (!parentNodeType || !parentNodeID)) {
         parentNodeType = parentNode.type;
@@ -82,19 +82,19 @@ class NucleusResourceAPI {
             if (!$resourceRelationshipDatastore) return;
 
             return Promise.all([
-              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-member', (parentNode === 'SYSTEM') ? 'SYSTEM' : `${parentNodeType}-${parentNodeID}`),
+              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-member-of', (parentNode === 'SYSTEM') ? 'SYSTEM' : `${parentNodeType}-${parentNodeID}`),
               // I am assuming the type of user... That could be changed eventually.
-              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored', `User-${originUserID}`)
+              $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored-by', `User-${originUserID}`)
             ]);
           })
           .return({ resource: $resource, resourceRelationshipList: [
               {
-                relationship: 'is-authored',
+                relationship: 'is-authored-by',
                 resourceID: originUserID,
                 resourceType: 'User'
               },
               {
-                relationship: 'is-member',
+                relationship: 'is-member-of',
                 resourceID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID,
                 resourceType: parentNodeType || 'SYSTEM'
               }
@@ -214,13 +214,15 @@ class NucleusResourceAPI {
     ])
       .then(([ resourceAttributes, nodeRelationshipList ]) => {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
-        const resourceRelationshipList = nodeRelationshipList
-          .map(({ predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
+        const resourceRelationship = nodeRelationshipList
+          .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
+            if (!accumulator.hasOwnProperty(relationship)) accumulator[relationship] = [];
+            accumulator[relationship].push({ relationship, resourceID, resourceType });
 
-            return { relationship, resourceID, resourceType };
-          });
+            return accumulator;
+          }, {});
 
-        return { resource: $resource, resourceRelationshipList };
+        return { resource: $resource, resourceRelationship };
       });
   }
 
@@ -254,7 +256,7 @@ class NucleusResourceAPI {
 
       case 'CurrentNodeDescent':
       {
-        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member');
+        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
         const userCurrentNodeChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userCurrentNodeList[0]);
 
         userCurrentNodeList.slice(0).concat(userCurrentNodeChildrenNodeList)
@@ -264,7 +266,7 @@ class NucleusResourceAPI {
 
       case 'CurrentNodeDescent':
       {
-        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member');
+        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
 
         anchorNodeIsList.push(userCurrentNodeList);
       }
@@ -275,7 +277,7 @@ class NucleusResourceAPI {
     }
 
     return Promise.all(anchorNodeIsList
-      .map(anchorNodeID => $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode.call(this, nodeType, anchorNodeID, 'is-member', originUserID)))
+      .map(anchorNodeID => $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode.call(this, nodeType, anchorNodeID, 'is-member-of', originUserID)))
       .then((childrenNodeListList) => {
 
         return childrenNodeListList
@@ -478,7 +480,7 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return { canUpdateResource: true };
 
-    const userDirectAncestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${userID}`, 'is-member');
+    const userDirectAncestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${userID}`, 'is-member-of');
     const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeList[0]);
     const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `${resourceType}-${resourceID}`);
 
@@ -515,7 +517,7 @@ class NucleusResourceAPI {
     const nodeIDList = [];
 
     async function retrieveAncestorForNodeByID (nodeID) {
-      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(nodeID, 'is-member');
+      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(nodeID, 'is-member-of');
 
       if (childrenNodeList.length === 0 || !!~childrenNodeList.indexOf('SYSTEM')) return null;
 
@@ -557,7 +559,7 @@ class NucleusResourceAPI {
     const nodeIDList = [];
 
     async function retrieveAncestorForNodeByID (nodeID) {
-      const ancestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(nodeID, 'is-member');
+      const ancestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(nodeID, 'is-member-of');
 
       if (ancestorNodeList.length === 0 || !!~ancestorNodeList.indexOf('SYSTEM')) return null;
 

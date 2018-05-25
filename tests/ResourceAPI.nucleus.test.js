@@ -105,7 +105,7 @@ mocha.suite("Nucleus Resource API", function () {
 
             if (!ancestorNodeID) return;
 
-            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`Node-${nodeID}`, 'is-member', (ancestorNodeID === 'SYSTEM') ? 'SYSTEM' : `Node-${ancestorNodeID}`);
+            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`Node-${nodeID}`, 'is-member-of', (ancestorNodeID === 'SYSTEM') ? 'SYSTEM' : `Node-${ancestorNodeID}`);
           }));
       });
 
@@ -404,12 +404,12 @@ mocha.suite("Nucleus Resource API", function () {
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledTwice).to.be.true;
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledWith(
               sinon.match($$nodeTypeNodeIDRegularExpression),
-              'is-member',
+              'is-member-of',
               `Group-${groupID}`
             )).to.be.true;
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledWith(
               sinon.match($$nodeTypeNodeIDRegularExpression),
-              'is-authored',
+              'is-authored-by',
               `User-${authorUserID}`
             )).to.be.true;
           });
@@ -461,7 +461,7 @@ mocha.suite("Nucleus Resource API", function () {
           .to.eventually.deep.property({ resourceRelationshipList: [
               {},
               {
-                relationship: 'is-member',
+                relationship: 'is-member-of',
                 resourceID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'
               }
             ] });
@@ -690,7 +690,7 @@ mocha.suite("Nucleus Resource API", function () {
         const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
         const nodeID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
 
-        return NucleusResourceAPI.retrieveAllNodesByRelationshipWithNodeByID.call({ $datastore, $resourceRelationshipDatastore }, 'Group', nodeID, 'is-member', originUserID)
+        return NucleusResourceAPI.retrieveAllNodesByRelationshipWithNodeByID.call({ $datastore, $resourceRelationshipDatastore }, 'Group', nodeID, 'is-member-of', originUserID)
           .then((resourceList) => {
             // The user retrieve 2 dummies and 1 user, itself as part of the group.
             chai.expect(resourceList).to.have.length(3);
@@ -815,7 +815,7 @@ function generateHierarchyTree (treeBranchList) {
 
           $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(
             (nucleusValidator.isObject(node)) ? `${nodeType}-${nodeID}` : node,
-            'is-member',
+            'is-member-of',
             (nucleusValidator.isObject(ancestorNode)) ? `${ancestorNodeType}-${ancestorNodeID}` : ancestorNode
           );
         }));
