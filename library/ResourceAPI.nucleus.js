@@ -34,7 +34,7 @@ class NucleusResourceAPI {
    * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceRelationshipList: Object[] }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceRelationship: Object }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -87,18 +87,24 @@ class NucleusResourceAPI {
               $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`${resourceType}-${$resource.ID}`, 'is-authored-by', `User-${originUserID}`)
             ]);
           })
-          .return({ resource: $resource, resourceRelationshipList: [
-              {
-                relationship: 'is-authored-by',
-                resourceID: originUserID,
-                resourceType: 'User'
-              },
-              {
-                relationship: 'is-member-of',
-                resourceID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID,
-                resourceType: parentNodeType || 'SYSTEM'
-              }
-            ]
+          .return({
+            resource: $resource,
+            resourceRelationship: {
+              'is-authored-by': [
+                {
+                  relationship: 'is-authored-by',
+                  resourceID: originUserID,
+                  resourceType: 'User'
+                }
+              ],
+              'is-member-of': [
+                {
+                  relationship: 'is-member-of',
+                  resourceID: (parentNode === 'SYSTEM') ? 'SYSTEM' : parentNodeID,
+                  resourceType: parentNodeType || 'SYSTEM'
+                }
+              ]
+            }
           });
       } catch (error) {
 
