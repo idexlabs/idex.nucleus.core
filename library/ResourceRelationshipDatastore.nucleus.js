@@ -176,6 +176,8 @@ class NucleusResourceRelationshipDatastore {
       return Promise.all(nodeList.map(this.parseNode.bind(this)));
     }
     if (node === 'SYSTEM') return node;
+    if (nucleusValidator.isObject(node)) return node;
+
     const $$nodeTypeNodeIDRegularExpression = new RegExp(`^(${nucleusValidator.pascalCaseRegularExpression})-(${nucleusValidator.UUIDRegularExpression})|SYSTEM$`);
     const [ matchedString, nodeType, nodeID ] = node.match($$nodeTypeNodeIDRegularExpression);
 
