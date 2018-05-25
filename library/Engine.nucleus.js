@@ -205,11 +205,9 @@ class NucleusEngine {
     // Add every action to extend as a proto action configuration to the action configuration list.
     // All the other extendable properties will be parsed when the action is executed.
     actionConfigurationList
-      .filter(({ actionNameToExtend }) => {
-
-        return !!actionNameToExtend;
-      })
       .forEach(({ actionNameToExtend, filePath }, index) => {
+        if (!actionNameToExtend) return;
+
         const { extendableActionName } = extendableActionConfigurationByActionName[actionNameToExtend];
 
         const context = require(filePath);

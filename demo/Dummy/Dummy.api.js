@@ -26,7 +26,7 @@ const resourceType = 'Dummy';
  * @argument {String} originDummyID
  *
  * @memberOf DummyAPI
- * @function create
+ * @function createResource
  */
 
 /**
@@ -36,7 +36,7 @@ const resourceType = 'Dummy';
  * @argument {String} originDummyID
  *
  * @memberOf DummyAPI
- * @function removeByID
+ * @function removeResourceByID
  */
 
 /**
@@ -46,7 +46,7 @@ const resourceType = 'Dummy';
  * @argument {String} originDummyID
  *
  * @memberOf DummyAPI
- * @function retrieveByID
+ * @function retrieveResourceByID
  */
 
 /**
@@ -57,7 +57,7 @@ const resourceType = 'Dummy';
  * @argument {String} originDummyID
  *
  * @memberOf DummyAPI
- * @function updateByID
+ * @function updateResourceByID
  */
 
 /**

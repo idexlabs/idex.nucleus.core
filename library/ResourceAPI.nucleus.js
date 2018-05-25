@@ -34,7 +34,7 @@ class NucleusResourceAPI {
    * @argument {String} [parentNodeType]
    * @argument {String} [parentNodeID]
    *
-   * @returns {Promise<{ resource: NucleusResource, resourceRelationship: Object }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceRelationships: Object }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -89,7 +89,7 @@ class NucleusResourceAPI {
           })
           .return({
             resource: $resource,
-            resourceRelationship: {
+            resourceRelationships: {
               'is-authored-by': [
                 {
                   relationship: 'is-authored-by',
@@ -181,7 +181,7 @@ class NucleusResourceAPI {
    * @argument {String} resourceID
    * @argument {String} originUserID
    *
-   * @returns {Promise<{ resource: NucleusResource }>}
+   * @returns {Promise<{ resource: NucleusResource, resourceRelationships: Object }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the resource model is not an instance of NucleusResource.
@@ -220,15 +220,15 @@ class NucleusResourceAPI {
     ])
       .then(([ resourceAttributes, nodeRelationshipList ]) => {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
-        const resourceRelationship = nodeRelationshipList
+        const resourceRelationships = nodeRelationshipList
           .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
-            if (!accumulator.hasOwnProperty(relationship)) accumulator[relationship] = [];
+            if (!('relationship' in accumulator)) accumulator[relationship] = [];
             accumulator[relationship].push({ relationship, resourceID, resourceType });
 
             return accumulator;
           }, {});
 
-        return { resource: $resource, resourceRelationship };
+        return { resource: $resource, resourceRelationships };
       });
   }
 
