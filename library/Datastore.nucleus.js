@@ -222,10 +222,12 @@ class NucleusDatastore {
    *
    * @throws Will throw an error if the item key is missing or an empty string.
    */
-  createItem (itemKey, item) {
+  createItem (itemKey, item, TTL) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item key must be a string.");
 
     const stringifiedItem = NucleusDatastore.stringifyItem(item);
+
+    if (!!TTL) return this.$$server.setexAsync(itemKey, TTL, stringifiedItem);
 
     return this.$$server.setAsync(itemKey, stringifiedItem)
       .return(item);

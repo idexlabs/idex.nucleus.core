@@ -15,6 +15,7 @@ const WALK_HIERARCHY_METHOD_LIST = [
   'CurrentNodeDescent',
   'CurrentNode'
 ];
+const HIERARCHY_TREE_CACHE_TTL = 10;
 
 class NucleusResourceAPI {
 
@@ -252,7 +253,7 @@ class NucleusResourceAPI {
     switch (walkHierarchyTreeMethod) {
       case 'TopNodeDescent':
       {
-        const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `User-${originUserID}`);
+        const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: originUserID, type: 'User' });
         const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
 
         userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
@@ -356,8 +357,6 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    console.time("Retrieving all resources");
-
     return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
 
@@ -397,7 +396,6 @@ class NucleusResourceAPI {
           });
       })
       .then((resourceList) => {
-        console.timeEnd("Retrieving all resources");
 
         return { resourceList };
       });
@@ -487,9 +485,9 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return { canRetrieveResource: true };
 
-    const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `User-${userID}`);
+    const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: userID, type: 'User' });
     const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
-    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `${resourceType}-${resourceID}`);
+    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: resourceID, type: resourceType });
 
     const nodeIDIntersectionList = userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
       .filter((node) => {
@@ -522,7 +520,7 @@ class NucleusResourceAPI {
 
     const userDirectAncestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${userID}`, 'is-member-of');
     const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeList[0]);
-    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, `${resourceType}-${resourceID}`);
+    const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: resourceID, type: resourceType });
 
     const nodeIDIntersectionList = userDirectAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
       .filter((node) => {
@@ -543,15 +541,19 @@ class NucleusResourceAPI {
   /**
    * Recursively walks down all the branches of a given resource and collect every children.
    *
-   * @argument {String} resourceID
+   * @argument {Node} node
    * @argument {Number} [depth=Infinity]
    *
    * @returns {Promise<String[]>}
    */
-  static async walkHierarchyTreeDownward (nodeID, depth = Infinity) {
-    const { $resourceRelationshipDatastore } = this;
+  static async walkHierarchyTreeDownward (node, depth = Infinity) {
+    const { $datastore, $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return [];
+
+    const cachedNodeList = await $datastore.retrieveItemByName(`NodeList:HierarchyTreeDownward:${node.ID}`);
+
+    if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
 
     const nodeList = [];
     const nodeIDList = [];
@@ -578,7 +580,13 @@ class NucleusResourceAPI {
     }
 
     return new Promise(async (resolve) => {
-      await retrieveAncestorForNodeByID.call(this, nodeID);
+      await retrieveAncestorForNodeByID.call(this, node);
+
+      try {
+        await $datastore.createItem(`NodeList:HierarchyTreeDownward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
+      } catch (error) {
+        reject(error);
+      }
 
       resolve(nodeList);
     });
@@ -587,13 +595,19 @@ class NucleusResourceAPI {
   /**
    * Recursively walks up all the branches of a given resource and collect every ancestors.
    *
-   * @argument {String} nodeID
+   * @argument {Node} node
    * @argument {Number} [depth=Infinity]
    *
    * @returns {Promise<Node[]>}
    */
-  static async walkHierarchyTreeUpward (nodeID, depth = Infinity) {
-    const { $resourceRelationshipDatastore } = this;
+  static async walkHierarchyTreeUpward (node, depth = Infinity) {
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    if (!$resourceRelationshipDatastore) return [];
+
+    const cachedNodeList = await $datastore.retrieveItemByName(`NodeList:HierarchyTreeUpward:${node.ID}`);
+
+    if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
 
     const nodeList = [];
     const nodeIDList = [];
@@ -619,8 +633,14 @@ class NucleusResourceAPI {
         .map(retrieveAncestorForNodeByID.bind(this)));
     }
 
-    return new Promise(async (resolve) => {
-      await retrieveAncestorForNodeByID.call(this, nodeID);
+    return new Promise(async (resolve, reject) => {
+      await retrieveAncestorForNodeByID.call(this, node);
+
+      try {
+        await $datastore.createItem(`NodeList:HierarchyTreeUpward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
+      } catch (error) {
+        reject(error);
+      }
 
       resolve(nodeList);
     });

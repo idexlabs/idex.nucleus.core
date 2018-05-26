@@ -95,7 +95,7 @@ class NucleusResourceRelationshipDatastore {
     }
 
     return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[SPO:${subject}:\xff`)
-      .then(this.parseItem.call(this));
+      .then(this.parseItem.bind(this));
   }
 
   /**

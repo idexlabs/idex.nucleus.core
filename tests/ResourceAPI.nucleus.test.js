@@ -1,5 +1,6 @@
 "use strict";
 
+const Promise = require('bluebird');
 const chai = require('chai');
 const chaiAsPromised = require('chai-as-promised');
 const mocha = require('mocha');
@@ -114,18 +115,18 @@ mocha.suite("Nucleus Resource API", function () {
       });
 
       mocha.test("The four ancestor of our branch's leaf are retrieved in order of closeness.", async function () {
-        const { $resourceRelationshipDatastore, branchNodeIDList } = this;
+        const { $datastore, $resourceRelationshipDatastore, branchNodeIDList } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $resourceRelationshipDatastore }, `Node-${branchNodeIDList[branchNodeIDList.length - 1]}`);
+        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $datastore, $resourceRelationshipDatastore }, `Node-${branchNodeIDList[branchNodeIDList.length - 1]}`);
 
         chai.expect(ancestorNodeIDList).to.have.length(4);
         chai.expect(ancestorNodeIDList).to.deep.equal(branchNodeIDList.slice(0).reverse().splice(1, branchNodeIDList.length - 2).map(nodeID => ({ ID: nodeID, type: 'Node' })));
       });
 
       mocha.test("The four children of our branch's knot are retrieved in order of closeness.", async function () {
-        const { $resourceRelationshipDatastore, branchNodeIDList } = this;
+        const { $datastore, $resourceRelationshipDatastore, branchNodeIDList } = this;
 
-        const childrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $resourceRelationshipDatastore }, `Node-${branchNodeIDList[1]}`);
+        const childrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, `Node-${branchNodeIDList[1]}`);
 
         chai.expect(childrenNodeIDList).to.have.length(4);
         chai.expect(childrenNodeIDList).to.deep.equal(branchNodeIDList.slice(0).splice(2, branchNodeIDList.length - 1).map(nodeID => ({ ID: nodeID, type: 'Node' })));
@@ -137,6 +138,8 @@ mocha.suite("Nucleus Resource API", function () {
 
       mocha.setup(function () {
         const { $datastore } = this;
+
+        console.log("FLUUUUUSH");
 
         return $datastore.$$server.flushallAsync();
       });
@@ -194,101 +197,101 @@ mocha.suite("Nucleus Resource API", function () {
       });
 
       mocha.test("All of the SYSTEM node members are retrieved.", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $resourceRelationshipDatastore }, 'SYSTEM');
+        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, 'SYSTEM');
 
         chai.expect(ancestorNodeIDList).to.have.length(12);
       });
 
       mocha.test("The two ancestors of the resource (0da2e0ec-02a1-4756-89f5-5bf2c2d3664a) are retrieved in order of closeness.", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $resourceRelationshipDatastore }, 'Resource-0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
+        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $datastore, $resourceRelationshipDatastore }, 'Resource-0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
 
         chai.expect(ancestorNodeIDList).to.have.length(2);
         chai.expect(ancestorNodeIDList).to.deep.equal([ { ID: 'bebffed5-d356-41d9-a4ed-32d33bba5127', type: 'Group' }, { ID: '1fb6d396-dd72-4943-9528-06db943d17d8', type: 'Group' } ]);
       });
 
       mocha.test("The ancestor of the resource (61fc9214-da8a-4426-8baf-b04565e87d4c) is retrieved.", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $resourceRelationshipDatastore }, 'Resource-61fc9214-da8a-4426-8baf-b04565e87d4c');
+        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $datastore, $resourceRelationshipDatastore }, 'Resource-61fc9214-da8a-4426-8baf-b04565e87d4c');
 
         chai.expect(ancestorNodeIDList).to.have.length(1);
         chai.expect(ancestorNodeIDList).to.deep.equal([ { ID: '1fb6d396-dd72-4943-9528-06db943d17d8', type: 'Group' } ]);
       });
 
       mocha.test("The ancestor of the user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) is retrieved.", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $resourceRelationshipDatastore }, 'User-fcc66afe-3d80-4225-bd1f-7a34bd26f403');
+        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeUpward.call({ $datastore, $resourceRelationshipDatastore }, 'User-fcc66afe-3d80-4225-bd1f-7a34bd26f403');
 
         chai.expect(ancestorNodeIDList).to.have.length(1);
         chai.expect(ancestorNodeIDList).to.deep.equal([ { ID: '1fb6d396-dd72-4943-9528-06db943d17d8', type: 'Group' } ]);
       });
 
       mocha.test("The three children of the group (caef15f7-58a0-4418-96c2-de211ff2496b) are retrieved in order of closeness.", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const childrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $resourceRelationshipDatastore }, 'Group-caef15f7-58a0-4418-96c2-de211ff2496b');
+        const childrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, 'Group-caef15f7-58a0-4418-96c2-de211ff2496b');
 
         chai.expect(childrenNodeIDList).to.have.length(3);
         chai.expect(childrenNodeIDList).to.deep.equal([ { ID: '8dcb8309-7ade-4ff4-a6ba-97e5642391c0', type: 'Group' }, { ID: 'f76a418a-a4a4-41e8-8f68-99d6b1446bbd', type: 'Resource' }, { ID: '87330246-ffee-4c87-aa5a-9232bca00132', type: 'User' }]);
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can retrieve the resource (61fc9214-da8a-4426-8baf-b04565e87d4c).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '61fc9214-da8a-4426-8baf-b04565e87d4c');
+        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '61fc9214-da8a-4426-8baf-b04565e87d4c');
 
         chai.expect(canRetrieveResource).to.be.true;
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can retrieve the resource (0da2e0ec-02a1-4756-89f5-5bf2c2d3664a).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
+        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
 
         chai.expect(canRetrieveResource).to.be.true;
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can not retrieve the resource (a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', 'a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57');
+        const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', 'a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57');
 
         chai.expect(canRetrieveResource).to.be.false;
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can update the resource (61fc9214-da8a-4426-8baf-b04565e87d4c).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '61fc9214-da8a-4426-8baf-b04565e87d4c');
+        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '61fc9214-da8a-4426-8baf-b04565e87d4c');
 
         chai.expect(canUpdateResource).to.be.true;
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can update the resource (0da2e0ec-02a1-4756-89f5-5bf2c2d3664a).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
+        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', '0da2e0ec-02a1-4756-89f5-5bf2c2d3664a');
 
         chai.expect(canUpdateResource).to.be.true;
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can not update the resource (a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', 'a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57');
+        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $datastore, $resourceRelationshipDatastore }, 'fcc66afe-3d80-4225-bd1f-7a34bd26f403', 'Resource', 'a7dc927f-9ebd-4d3b-8cf5-2ffea24bcf57');
 
         chai.expect(canUpdateResource).to.be.false;
       });
 
       mocha.test("The user (87330246-ffee-4c87-aa5a-9232bca00132) can not update the resource (f76a418a-a4a4-41e8-8f68-99d6b1446bbd).", async function () {
-        const { $resourceRelationshipDatastore } = this;
+        const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $resourceRelationshipDatastore }, '87330246-ffee-4c87-aa5a-9232bca00132', 'Resource', 'f76a418a-a4a4-41e8-8f68-99d6b1446bbd');
+        const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call({ $datastore, $resourceRelationshipDatastore }, '87330246-ffee-4c87-aa5a-9232bca00132', 'Resource', 'f76a418a-a4a4-41e8-8f68-99d6b1446bbd');
 
         chai.expect(canUpdateResource).to.be.false;
       });
@@ -770,7 +773,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite.only("Retrieve all performance", function () {
+    mocha.suite("Retrieve all performance", function () {
       const dummyCountList = [ 200, 400, 800, 1600 ];
 
       // Original benchmark is 200 items retrieved in 19 seconds.
@@ -781,9 +784,10 @@ mocha.suite("Nucleus Resource API", function () {
       // 800 dummies => 904ms
       // 1600 dummies => 2300ms
       dummyCountList
-        .map((dummyCount) => {
+        .forEach((dummyCount) => {
 
           mocha.suite(`${dummyCount} dummies`, function () {
+            const attemptCountList = [1, 3, 5];
 
             mocha.setup(function () {
               const { $datastore, $resourceRelationshipDatastore } = this;
@@ -798,22 +802,35 @@ mocha.suite("Nucleus Resource API", function () {
                 .then(console.timeEnd.bind(console, "Setup"));
             });
 
-            mocha.test("All the dummy resources are retrieved.", function () {
-              const { $datastore, $resourceRelationshipDatastore } = this;
+            attemptCountList
+              .forEach((attemptCount) => {
 
-              const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+                mocha.test(`All the dummy resources are retrieved. ${attemptCount} attempts`, function () {
+                  const { $datastore, $resourceRelationshipDatastore } = this;
 
-              return NucleusResourceAPI.retrieveAllResourcesByType.call({ $datastore, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, originUserID)
-                .then(({ resourceList }) => {
-                  // The user retrieve 202 dummies.
-                  chai.expect(resourceList).to.have.length(dummyCount);
-                  chai.expect(resourceList[0]).to.have.property('resource');
-                  chai.expect(resourceList[0]).to.have.nested.property('resource.ID');
-                  chai.expect(resourceList[0]).to.have.property('resourceRelationships');
-                  chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-authored-by');
-                  chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-member-of');
+                  const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+
+                  return NucleusResourceAPI.retrieveAllResourcesByType.call({ $datastore, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, originUserID)
+                    .then(({ resourceList }) => {
+                      // The user retrieve 202 dummies.
+                      chai.expect(resourceList).to.have.length(dummyCount);
+                      chai.expect(resourceList[0]).to.have.property('resource');
+                      chai.expect(resourceList[0]).to.have.nested.property('resource.ID');
+                      chai.expect(resourceList[0]).to.have.property('resourceRelationships');
+                      chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-authored-by');
+                      chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-member-of');
+                    })
+                    .then(() => {
+
+                      return Promise.all(Array.apply(null, { length: attemptCount - 1 }))
+                        .map(() => {
+
+                          return NucleusResourceAPI.retrieveAllResourcesByType.call({ $datastore, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, originUserID);
+                        });
+                    });
                 });
-            });
+
+              });
 
           });
 
