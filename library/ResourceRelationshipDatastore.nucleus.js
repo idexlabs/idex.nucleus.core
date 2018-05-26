@@ -66,7 +66,7 @@ class NucleusResourceRelationshipDatastore {
   /**
    * Retrieves all the relationship for a given subject node.
    *
-   * @argument {String|Node} subject
+   * @argument {String|Node|String[]|Node[]} subject
    *
    * @returns {Promise<{ predicate: String, object: Node }>}
    */
@@ -77,19 +77,25 @@ class NucleusResourceRelationshipDatastore {
       return this.retrieveAllRelationshipsForSubject(stringifiedAnchorNode);
     }
 
+    if (nucleusValidator.isArray(subject)) {
+      const subjectList = subject;
+
+      const rangeByLexicalSearchDatastoreRequestList = subjectList
+        .map((subject) => {
+          const stringifiedAnchorNode = (nucleusValidator.isObject(subject)) ? `${subject.type}-${subject.ID}` : subject;
+
+          return ['zrangebylex', 'ResourceRelationship', `[SPO:${stringifiedAnchorNode}:`, `[SPO:${stringifiedAnchorNode}:\xff`];
+        });
+
+      return this.$datastore.$$server.multi(rangeByLexicalSearchDatastoreRequestList).execAsync()
+        .then((itemList) => {
+
+          return itemList.map(this.parseItem.bind(this));
+        });
+    }
+
     return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[SPO:${subject}:\xff`)
-      .then((itemList = []) => {
-
-        return itemList
-          .map((item) => {
-            const [ indexScheme, subject, predicate, object ] = item.split(':');
-
-            return {
-              predicate,
-              object: this.parseNode(object)
-            };
-          });
-      });
+      .then(this.parseItem.call(this));
   }
 
   /**
@@ -162,6 +168,22 @@ class NucleusResourceRelationshipDatastore {
       .then(this.parseNode.bind(this));
   }
 
+  parseItem (item) {
+    if (nucleusValidator.isArray(item)) {
+      const itemList = item;
+
+      return itemList.map(this.parseItem.bind(this));
+    }
+
+    const [ indexScheme, subject, predicate, object ] = item.split(':');
+
+    return {
+      subject: this.parseNode(subject),
+      predicate,
+      object: this.parseNode(object)
+    };
+  }
+
   /**
    * Parses a string node to an object node.
    *
@@ -173,7 +195,7 @@ class NucleusResourceRelationshipDatastore {
     if (nucleusValidator.isArray(node)) {
       const nodeList = node;
 
-      return Promise.all(nodeList.map(this.parseNode.bind(this)));
+      return nodeList.map(this.parseNode.bind(this));
     }
     if (node === 'SYSTEM') return node;
     if (nucleusValidator.isObject(node)) return node;

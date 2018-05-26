@@ -3,6 +3,7 @@
 const Promise = require('bluebird');
 const uuid = require('uuid');
 
+const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusResource = require('./Resource.nucleus');
 
@@ -351,19 +352,52 @@ class NucleusResourceAPI {
    * @throws Will throw an error if no datastore is passed.
    */
   static retrieveAllResourcesByType (resourceType, NucleusResourceModel, originUserID, walkHierarchyTreeMethod = 'TopNodeDescent') {
+    const { $datastore, $resourceRelationshipDatastore } = this;
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
+    console.time("Retrieving all resources");
 
     return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
 
-        return Promise.all(nodeList
-          .map(({ ID: nodeID, type: nodeType }) => {
 
-            return NucleusResourceAPI.retrieveResourceByID.call(this, nodeType, NucleusResourceModel, nodeID, originUserID);
-          }));
+        const itemDatastoreRequestList = nodeList
+          .map(({ ID, type }) => {
+            const itemKey = NucleusResource.generateItemKey(type, ID);
+
+            return [ 'HGETALL', itemKey ];
+          });
+
+        const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
+          // NucleusResourceModel, shouldn't request the origin user ID here...
+          .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+
+        const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
+
+        return Promise.all([ $$itemListPromise, $$resourceRelationshipsListPromise ])
+          .then(([ resourceList, nodeRelationshipListList ]) => {
+
+            return resourceList
+              .reduce((accumulator, resource, index) => {
+                const nodeRelationshipList = nodeRelationshipListList[index];
+
+                const resourceRelationships = nodeRelationshipList
+                  .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
+                    if (!('relationship' in accumulator)) accumulator[relationship] = [];
+                    accumulator[relationship].push({ relationship, resourceID, resourceType });
+
+                    return accumulator;
+                  }, {});
+
+                accumulator.push({ resource, resourceRelationships });
+
+                return accumulator;
+              }, []);
+          });
       })
       .then((resourceList) => {
+        console.timeEnd("Retrieving all resources");
 
         return { resourceList };
       });
