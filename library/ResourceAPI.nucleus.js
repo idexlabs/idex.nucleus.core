@@ -439,7 +439,7 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isObject(resourceAttributes)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource attributes must be an object.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    const { $datastore } = this;
+    const { $datastore, $resourceRelationshipDatastore } = this;
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
@@ -453,8 +453,14 @@ class NucleusResourceAPI {
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
-    return $datastore.retrieveAllItemsFromHashByName(resourceItemKey)
-      .then((staleResourceAttributes) => {
+    return Promise.all([
+      $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
+      $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
+        ID: resourceID,
+        type: resourceType
+      })
+    ])
+      .then(async ([ staleResourceAttributes, nodeRelationshipList ]) => {
         const updatedISOTime = new Date().toISOString();
         staleResourceAttributes.meta = Object.assign({ updatedISOTime }, staleResourceAttributes.meta);
 
@@ -465,8 +471,17 @@ class NucleusResourceAPI {
 
         $resource.meta.updatedISOTime = new Date().toISOString();
 
-        return $datastore.addItemToHashFieldByName(resourceItemKey, Object.assign({}, { meta: $resource.meta }, resourceAttributes))
-          .return({ resource: $resource });
+        await $datastore.addItemToHashFieldByName(resourceItemKey, Object.assign({}, { meta: $resource.meta }, resourceAttributes));
+
+        const resourceRelationships = nodeRelationshipList
+          .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
+            if (!('relationship' in accumulator)) accumulator[relationship] = [];
+            accumulator[relationship].push({ relationship, resourceID, resourceType });
+
+            return accumulator;
+          }, {});
+
+        return { resource: $resource, resourceRelationships };
       });
   }
 

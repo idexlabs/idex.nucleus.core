@@ -880,6 +880,27 @@ mocha.suite("Nucleus Resource API", function () {
           });
       });
 
+      mocha.test("The resource relationships are returned.", async function () {
+        const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
+
+        const dummyAttributes = {
+          name: `Dummy ${uuid.v4()}`
+        };
+        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
+
+        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
+
+        const dummyAttributesToUpdate = {
+          name: `Dummy ${uuid.v4()}`
+        };
+
+        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
+          .then(({ resource, resourceRelationships }) => {
+            chai.expect(resourceRelationships).to.be.an('object');
+          });
+      });
+
       mocha.test("The dummy resource can't be updated by a user from another branch.", async function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
