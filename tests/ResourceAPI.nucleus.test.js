@@ -139,8 +139,6 @@ mocha.suite("Nucleus Resource API", function () {
       mocha.setup(function () {
         const { $datastore } = this;
 
-        console.log("FLUUUUUSH");
-
         return $datastore.$$server.flushallAsync();
       });
 

@@ -76,6 +76,10 @@ class NucleusResourceAPI {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID, reservedResourceID);
         const resourceItemKey = $resource.generateOwnItemKey();
 
+        const resourceExists = !!(await $datastore.$$server.existsAsync(resourceItemKey));
+
+        if (resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${$resource.ID}") already exists.`);
+
         return Promise.all([
           $datastore.addItemToHashFieldByName(resourceItemKey, $resource),
           $datastore.addItemToSetByName(RESOURCE_ID_BY_TYPE_TABLE_NAME, resourceType, $resource.ID),
