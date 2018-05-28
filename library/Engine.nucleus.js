@@ -568,6 +568,13 @@ class NucleusEngine {
           if (actionStatus === NucleusAction.CompletedActionStatus || actionStatus === NucleusAction.FailedActionStatus) {
             this.$logger.debug(`The action "${actionName} (${actionID})" status has been updated to "${actionStatus}".`);
             // Resolve or reject the promise with the final message base on the action's status.
+            if (actionStatus === NucleusAction.CompletedActionStatus) resolve(actionFinalMessage);
+            else if ('error' in actionFinalMessage) {
+              const errorAttributes = actionFinalMessage.error;
+              const NucleusErrorType = (Object.keys(NucleusError).includes(errorAttributes.name)) ? NucleusError[errorAttributes.name] : NucleusError;
+
+              reject(new NucleusErrorType(errorAttributes.message, { error: errorAttributes }));
+            }
             ((actionStatus === NucleusAction.CompletedActionStatus) ? resolve : reject)(actionFinalMessage);
 
             $actionSubscriberDatastore.unsubscribeFromChannelName(channelName);
