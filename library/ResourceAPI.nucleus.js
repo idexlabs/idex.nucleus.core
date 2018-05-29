@@ -443,15 +443,15 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
-
-    if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
-
     const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
 
     const resourceExists = !!(await $datastore.$$server.existsAsync(resourceItemKey));
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
+
+    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
+
+    if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
 
     return Promise.all([
       $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
