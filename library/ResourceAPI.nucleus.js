@@ -577,29 +577,29 @@ class NucleusResourceAPI {
     const nodeList = [];
     const nodeIDList = [];
 
-    async function retrieveAncestorForNodeByID (nodeID) {
-      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(nodeID, 'is-member-of');
+    async function retrieveChildrenForNodeByID (node) {
+      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(node, 'is-member-of');
 
       if (childrenNodeList.length === 0 || !!~childrenNodeList.indexOf('SYSTEM')) return null;
 
       childrenNodeList
         .forEach((node) => {
-          const { ID: nodeID } = node;
+          const { ID: nodeID, type: nodeType } = node;
 
-          if (!~nodeIDList.indexOf(nodeID)) {
+          if (!nodeIDList.includes(nodeID)) {
             nodeList.push(node);
-            nodeIDList.push(nodeID);
+            nodeIDList.push(`${nodeType}-${nodeID}`);
           }
-        }, nodeList);
+        });
 
       if (nodeList.length >= depth) return;
 
       return Promise.all(childrenNodeList
-        .map(retrieveAncestorForNodeByID.bind(this)));
+        .map(retrieveChildrenForNodeByID.bind(this)));
     }
 
     return new Promise(async (resolve) => {
-      await retrieveAncestorForNodeByID.call(this, node);
+      await retrieveChildrenForNodeByID.call(this, node);
 
       try {
         await $datastore.createItem(`NodeList:HierarchyTreeDownward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
