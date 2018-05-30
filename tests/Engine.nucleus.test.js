@@ -187,6 +187,20 @@ mocha.suite('Nucleus Engine', function () {
         methodName: 'executeSimpleDummyWithArguments'
       });
 
+      await $dummyEngine.storeActionConfiguration({
+        actionName: 'ExecuteSimpleDummyWithOptions',
+        actionSignature: [ 'AID1', 'options' ],
+        argumentConfigurationByArgumentName: {
+          AID1: 'string',
+          options: 'object?',
+          'options.AID2': 'string?',
+          'options.AID3': 'string?',
+          originUserID: 'string'
+        },
+        contextName: 'Self',
+        methodName: 'executeSimpleDummyWithOptions'
+      });
+
     });
 
     mocha.suiteTeardown(async function () {
@@ -221,6 +235,48 @@ mocha.suite('Nucleus Engine', function () {
         const { finalMessage } = await $dummyEngine.executeAction($action);
 
         chai.expect(finalMessage).to.deep.equal({ AID1, AID2 });
+      });
+
+      mocha.test("The action is executed without the optional arguments.", async function () {
+        const { $dummyEngine } = this;
+        const AID1 = uuid.v1();
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithOptions', { AID1 }, { originUserID: uuid.v4() });
+
+        const { finalMessage } = await $dummyEngine.executeAction($action);
+
+        chai.expect(finalMessage).to.have.property('AID1');
+        chai.expect(finalMessage.AID1).to.be.a('string');
+        chai.expect(finalMessage).to.have.property('AID2');
+        chai.expect(finalMessage.AID2).to.be.a('string');
+        chai.expect(finalMessage).to.have.property('AID3');
+        chai.expect(finalMessage.AID3).to.be.a('string');
+      });
+
+      mocha.test("The action is executed with the optional argument as an object.", async function () {
+        const { $dummyEngine } = this;
+        const AID1 = uuid.v1();
+        const AID2 = uuid.v1();
+        const AID3 = uuid.v1();
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithOptions', { AID1, options: { AID2, AID3 } }, { originUserID: uuid.v4() });
+
+        const { finalMessage } = await $dummyEngine.executeAction($action);
+
+        chai.expect(finalMessage).to.deep.equal({ AID1, AID2, AID3 });
+      });
+
+      mocha.test("The action is executed with all the optional arguments.", async function () {
+        const { $dummyEngine } = this;
+        const AID1 = uuid.v1();
+        const AID2 = uuid.v1();
+        const AID3 = uuid.v1();
+
+        const $action = new NucleusAction('ExecuteSimpleDummyWithOptions', { AID1, AID2, AID3 }, { originUserID: uuid.v4() });
+
+        const { finalMessage } = await $dummyEngine.executeAction($action);
+
+        chai.expect(finalMessage).to.deep.equal({ AID1, AID2, AID3 });
       });
 
       mocha.test("Using an action name that was not configured throws an error.", function () {

@@ -51,6 +51,23 @@ class DummyEngine extends NucleusEngine {
   }
 
   /**
+   * @Nucleus ActionName ExecuteSimpleDummyWithOptions
+   *
+   * @argument {String} AID1
+   * @argument {Object} [options]
+   * @argument {String} [options.AID2]
+   * @argument {String} [options.AID3]
+   * @argument {String} originUserID
+   *
+   * @return {Promise<Object>}
+   */
+  executeSimpleDummyWithOptions (AID1, options, originUserID) {
+    const { AID2 = uuid.v4(), AID3 = uuid.v4() } = options;
+
+    return Promise.resolve({ AID1, AID2, AID3 });
+  }
+
+  /**
    * Executes a simple dummy which has a complex signature.
    *
    * @Nucleus ActionName ExecuteSimpleDummyWithComplexSignature

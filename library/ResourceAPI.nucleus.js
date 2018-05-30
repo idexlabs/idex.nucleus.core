@@ -638,11 +638,11 @@ class NucleusResourceAPI {
 
       ancestorNodeList
         .forEach((node) => {
-          const { ID: nodeID } = node;
+          const { ID: nodeID, type: nodeType } = node;
 
           if (!~nodeIDList.indexOf(nodeID)) {
             nodeList.push(node);
-            nodeIDList.push(nodeID);
+            nodeIDList.push(`${nodeType}-${nodeID}`);
           }
         }, nodeList);
 

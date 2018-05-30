@@ -391,12 +391,14 @@ class NucleusEngine {
   async executeMethodInContext($action, actionMessage, actionSignature, contextName, filePath, methodName) {
     const argumentList = actionSignature
       .reduce((accumulator, argumentName) => {
-        if (argumentName === 'options') accumulator.push(actionMessage);
-        if (argumentName === 'originUserID') accumulator.push($action.originUserID);
+        if (argumentName === 'options' && !('options' in actionMessage)) accumulator.push(actionMessage);
+        else if (argumentName === 'originUserID') accumulator.push($action.originUserID);
         else accumulator.push(actionMessage[argumentName]);
 
         return accumulator;
       }, []);
+
+    if (!actionSignature.includes('originUserID')) argumentList.push($action.originUserID);
 
     const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
@@ -433,7 +435,7 @@ class NucleusEngine {
         return argumentNameList
           .reduce((accumulator, argumentName) => {
             if (argumentName === 'options') accumulator.push(argumentName);
-            if (argumentName === 'originUserID') accumulator.push(argumentName);
+            else if (argumentName === 'originUserID') accumulator.push(argumentName);
             else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
 
             return accumulator;

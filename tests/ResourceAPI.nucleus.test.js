@@ -772,7 +772,7 @@ mocha.suite("Nucleus Resource API", function () {
     });
 
     mocha.suite("Retrieve all performance", function () {
-      const dummyCountList = [ 200, 400, 800, 1600 ];
+      const dummyCountList = [ 50, 200, 400, 800, 1600 ];
 
       // Original benchmark is 200 items retrieved in 19 seconds.
       // After modification, the resources are retrieved in 280ms (without relationships)
