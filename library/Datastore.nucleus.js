@@ -20,6 +20,7 @@ Promise.promisifyAll(fs);
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
 
+const $$dotNotationKeyRegularExpression = /[A-Za-z0-9-_$]+\.[A-Za-z0-9-_$]/;
 const $$keyspaceNotificationChannelNameRegularExpression = new RegExp('__keyspace@[0-9]__:.*|__keyevent@[0-9]__:.*');
 const $$predicateRegularExpression = new RegExp('SOP\\:[A-Za-z0-9\\-]+\\:[A-Za-z0-9\\-]+\\:([A-Za-z0-9\\-]+)');
 
@@ -576,6 +577,100 @@ class NucleusDatastore {
   }
 
   /**
+   * Searches for items in a hash given its name.
+   * @example
+   * $datastore.searchItemInHashByName('UserSettings', 'localization');
+   * $datastore.searchItemInHashByName('UserSettings', 'localization.defaultLanguageISO');
+   * $datastore.searchItemInHashByName('UserSettings', ['localization', 'notifications');
+   * $datastore.searchItemInHashByName('UserSettings', ['localization.defaultLanguageISO', 'notifications.channels.email']);
+   *
+   * @argument {String} itemKey
+   * @argument {String} [fieldName]
+   * @argument {String[]} [fieldNameList]
+   *
+   * @return {*}
+   */
+  searchItemInHashByName (itemKey, fieldName) {
+    if (nucleusValidator.isArray(fieldName)) {
+      const fieldNameList = fieldName;
+
+      if (!nucleusValidator.isArray(fieldNameList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The field name list must be an array.");
+      const dotNotationFieldNameList = fieldNameList
+        .filter((fieldName) => {
+
+          return $$dotNotationKeyRegularExpression.test(fieldName)
+        });
+
+      if (dotNotationFieldNameList.length > 0 && dotNotationFieldNameList.length !== fieldNameList.length) throw new NucleusError.UnexpectedValueNucleusError("The field name list must be only field names to retrieve a group or use dot notation to retrieve a specific field's value, not both.");
+
+      const fieldNamesAreDotNotation = dotNotationFieldNameList.length === fieldNameList.length;
+
+      if (fieldNamesAreDotNotation) return this.retrieveItemFromHashFieldByName.apply(this, [itemKey].concat(fieldNameList))
+        .then((itemList) => {
+
+          return itemList
+            .reduce((accumulator, item, index) => {
+              const fieldName = fieldNameList[index];
+              const [field, key] = fieldName.split(".");
+
+              if (!(field in accumulator)) accumulator[field] = {};
+
+              accumulator[field][key] = item;
+
+              return accumulator
+            }, {})
+        });
+      else {
+        const datastoreRequestList = fieldNameList
+          .map((fieldName) => {
+
+            return ['HSCAN', itemKey, 0, 'MATCH', `${fieldName}*`];
+          });
+
+        return this.$$server.multi(datastoreRequestList).execAsync()
+          .then((responseList) => {
+
+            return responseList
+              .reduce((accumulator, [ cursor, itemHashList ], index) => {
+                const fieldName = fieldNameList[index];
+                const parsedHashItems = NucleusDatastore.parseHashItem(itemHashList);
+                const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
+                const { [fieldName]: item } = expandDotNotationObject(parsedJSONItems);
+
+                accumulator[fieldName] = item;
+
+                return accumulator
+              }, {});
+          });
+      }
+
+      return this.retrieveItemFromHashFieldByName.apply(this, [itemKey].concat(fieldNameList));
+    }
+
+    if (!nucleusValidator.isString(fieldName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The field name must be a string.");
+
+    const fieldNameIsDotNotation = $$dotNotationKeyRegularExpression.test(fieldName);
+
+    if (fieldNameIsDotNotation) return this.retrieveItemFromHashFieldByName(itemKey, fieldName)
+      .then((item) => {
+
+        // TODO: Change this
+        return expandDotNotationObject({[fieldName]: item});
+      });
+    else return this.$$server.hscanAsync(itemKey, 0, 'MATCH', `${fieldName}*`)
+      .then(([ cursor, itemHashList ]) => {
+        // HSCAN returns an array that contains the keys and values.
+        const parsedHashItems = NucleusDatastore.parseHashItem(itemHashList);
+        // Any Redis item's value is likely to be JSON.
+        const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
+        // Settings objects are likely to have dot notation properties.
+        const items = expandDotNotationObject(parsedJSONItems);
+
+        return items;
+      });
+  }
+
+  /**
    * Subscribes the client to a channel given its name.
    *
    * @argument {String} channelName
@@ -670,3 +765,20 @@ class NucleusDatastore {
 }
 
 module.exports = NucleusDatastore;
+
+function expandDotNotationObject (object) {
+
+  return Object.keys(object)
+    .reduce((accumulator, propertyName) => {
+      const value = object[propertyName];
+      if ($$dotNotationKeyRegularExpression.test(propertyName)) {
+        const [ field, key ] = propertyName.split('.');
+
+        if (!(field in accumulator)) accumulator[field] = {};
+
+        accumulator[field][key] = value;
+
+        return accumulator;
+      }
+    }, {});
+}
