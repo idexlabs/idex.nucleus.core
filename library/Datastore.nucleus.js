@@ -617,8 +617,8 @@ class NucleusDatastore {
 
               accumulator[field][key] = item;
 
-              return accumulator
-            }, {})
+              return accumulator;
+            }, {});
         });
       else {
         const datastoreRequestList = fieldNameList
@@ -635,11 +635,11 @@ class NucleusDatastore {
                 const fieldName = fieldNameList[index];
                 const parsedHashItems = NucleusDatastore.parseHashItem(itemHashList);
                 const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
-                const { [fieldName]: item } = expandDotNotationObject(parsedJSONItems);
+                const { [fieldName]: item } = NucleusDatastore.expandDotNotationObject(parsedJSONItems);
 
                 accumulator[fieldName] = item;
 
-                return accumulator
+                return accumulator;
               }, {});
           });
       }
@@ -655,7 +655,7 @@ class NucleusDatastore {
       .then((item) => {
 
         // TODO: Change this
-        return expandDotNotationObject({[fieldName]: item});
+        return NucleusDatastore.expandDotNotationObject({[fieldName]: item});
       });
     else return this.$$server.hscanAsync(itemKey, 0, 'MATCH', `${fieldName}*`)
       .then(([ cursor, itemHashList ]) => {
@@ -664,7 +664,7 @@ class NucleusDatastore {
         // Any Redis item's value is likely to be JSON.
         const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
         // Settings objects are likely to have dot notation properties.
-        const items = expandDotNotationObject(parsedJSONItems);
+        const items = NucleusDatastore.expandDotNotationObject(parsedJSONItems);
 
         return items;
       });
@@ -692,6 +692,57 @@ class NucleusDatastore {
   unsubscribeFromChannelName (channelName) {
 
     return this.$$server.unsubscribeAsync(channelName);
+  }
+
+  // static collapseObjectToDotNotation (object) {
+  //
+  //   return Object.keys(object)
+  //     .reduce((accumulator, propertyName) => {
+  //       const value = object[propertyName];
+  //
+  //       if (nucleusValidator.isObject(value)) {
+  //         propertyName = propertyName
+  //           .reduce((accumulator, propertyName, index, list) => {
+  //             if (index + 1 !== list.length) {
+  //               if (!(propertyName in accumulator)) accumulator[propertyName] = {};
+  //
+  //               return accumulator[propertyName];
+  //             } else {
+  //               accumulator[propertyName] = (value === null) ? undefined : value;
+  //
+  //               return accumulator;
+  //             }
+  //           }, object);
+  //       } else accumulator[propertyName] = value;
+  //
+  //       return accumulator;
+  //     }, {});
+  // }
+
+  static expandDotNotationObject (object) {
+
+    return Object.keys(object)
+      .reduce((accumulator, propertyName) => {
+        const value = object[propertyName];
+        if ($$dotNotationKeyRegularExpression.test(propertyName)) {
+          const dotNotationPropertyList = propertyName.split('.');
+
+          dotNotationPropertyList
+            .reduce((accumulator, propertyName, index, list) => {
+              if (index + 1 !== list.length) {
+                if (!(propertyName in accumulator)) accumulator[propertyName] = {};
+
+                return accumulator[propertyName];
+              } else {
+                accumulator[propertyName] = (value === null) ? undefined : value;
+
+                return accumulator;
+              }
+            }, accumulator);
+        } else accumulator[propertyName] = (value === null) ? undefined : value;
+
+        return accumulator;
+      }, {});
   }
 
   /**
@@ -765,20 +816,3 @@ class NucleusDatastore {
 }
 
 module.exports = NucleusDatastore;
-
-function expandDotNotationObject (object) {
-
-  return Object.keys(object)
-    .reduce((accumulator, propertyName) => {
-      const value = object[propertyName];
-      if ($$dotNotationKeyRegularExpression.test(propertyName)) {
-        const [ field, key ] = propertyName.split('.');
-
-        if (!(field in accumulator)) accumulator[field] = {};
-
-        accumulator[field][key] = value;
-
-        return accumulator;
-      }
-    }, {});
-}
