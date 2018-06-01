@@ -91,7 +91,7 @@ mocha.suite("Nucleus Datastore", function () {
   //
   // });
 
-  mocha.suite.only("#expandDotNotationObject", function () {
+  mocha.suite("#expandDotNotationObject", function () {
 
     mocha.test("Expands dot notation object", function () {
       const expandedObject = NucleusDatastore.expandDotNotationObject({
