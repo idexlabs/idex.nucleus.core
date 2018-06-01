@@ -24,7 +24,7 @@ class PublisherEngine {
 
     this.actionTTL = 1000 * 60 * 60; // One hour
 
-    this.$$promise = this.$actionDatastore;
+    this.$$promise = Promise.all([this.$actionDatastore]);
 
     const $$proxy = new Proxy(this, {
       get: function (object, property) {
