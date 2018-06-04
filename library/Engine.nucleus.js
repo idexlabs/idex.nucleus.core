@@ -406,6 +406,8 @@ class NucleusEngine {
 
     const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
+    if (nucleusValidator.isEmpty($executionContext[methodName])) throw new NucleusError.UndefinedContextNucleusError(`Could not execute the action ${$action.name} because the handler method could not be retrieved.`);
+
     const actionResponse = await $executionContext[methodName].apply((
       // If the action is part of the current engine, the context of the method to execute will be `this`...
       (contextName === 'Self')) ?
@@ -465,6 +467,7 @@ end
       })[0];
 
     if (!fulfilledActionSignature) throw new NucleusError.UndefinedContextNucleusError("Can't execute the action because one or more argument is missing", {
+      actionName: $action.name,
       actionSignatureList,
       actionMessagePropertyList: Object.keys(actionMessage)
     });

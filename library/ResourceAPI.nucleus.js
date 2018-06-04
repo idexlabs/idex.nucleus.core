@@ -361,47 +361,75 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
+    console.time(`Retrieve all ${resourceType} for ${originUserID}`);
+    console.time(`Retrieve all ${resourceType} nodes for ${originUserID}`);
+
     return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
 
-
-        const itemDatastoreRequestList = nodeList
-          .map(({ ID, type }) => {
-            const itemKey = NucleusResource.generateItemKey(type, ID);
-
-            return [ 'HGETALL', itemKey ];
-          });
-
-        const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
-          // NucleusResourceModel, shouldn't request the origin user ID here...
-          .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
-
-        const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
-
-        return Promise.all([ $$itemListPromise, $$resourceRelationshipsListPromise ])
-          .then(([ resourceList, nodeRelationshipListList ]) => {
-
-            return resourceList
-              .reduce((accumulator, resource, index) => {
-                const nodeRelationshipList = nodeRelationshipListList[index];
-
-                const resourceRelationships = nodeRelationshipList
-                  .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
-                    if (!('relationship' in accumulator)) accumulator[relationship] = [];
-                    accumulator[relationship].push({ relationship, resourceID, resourceType });
-
-                    return accumulator;
-                  }, {});
-
-                accumulator.push({ resource, resourceRelationships });
-
-                return accumulator;
-              }, []);
-          });
+        console.timeEnd(`Retrieve all ${resourceType} nodes for ${originUserID}`);
+        console.time(`Extend ${resourceType} nodes`);
+        return NucleusResourceAPI.extendNodeList.call({ $datastore, $resourceRelationshipDatastore }, nodeList, NucleusResourceModel, originUserID);
       })
       .then((resourceList) => {
 
+        console.timeEnd(`Extend ${resourceType} nodes`);
+
+        console.timeEnd(`Retrieve all ${resourceType} for ${originUserID}`);
+
         return { resourceList };
+      });
+  }
+
+  static async retrieveAllResourcesByTypeForResourceByID (anchorResourceType, anchorResourceID, resourceType, NucleusResourceModel, originUserID) {
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call(this, originUserID, anchorResourceType, anchorResourceID);
+
+    if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve anything from the ${anchorResourceType} ("${anchorResourceID}")`);
+
+    const nodeList = await $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode(resourceType, `${anchorResourceType}-${anchorResourceID}`);
+
+    const resourceList = await NucleusResourceAPI.extendNodeList.call(this, nodeList, NucleusResourceModel, originUserID);
+
+    return { resourceList };
+  }
+
+  static extendNodeList(nodeList = [], NucleusResourceModel, originUserID) {
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    const itemDatastoreRequestList = nodeList
+      .map(({ID, type}) => {
+        const itemKey = NucleusResource.generateItemKey(type, ID);
+
+        return ['HGETALL', itemKey];
+      });
+
+    const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
+    // NucleusResourceModel, shouldn't request the origin user ID here...
+      .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+
+    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
+
+    return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
+      .then(([resourceList, nodeRelationshipListList]) => {
+
+        return resourceList
+          .reduce((accumulator, resource, index) => {
+            const nodeRelationshipList = nodeRelationshipListList[index];
+
+            const resourceRelationships = nodeRelationshipList
+              .reduce((accumulator, {predicate: relationship, object: {ID: resourceID, type: resourceType}}) => {
+                if (!('relationship' in accumulator)) accumulator[relationship] = [];
+                accumulator[relationship].push({relationship, resourceID, resourceType});
+
+                return accumulator;
+              }, {});
+
+            accumulator.push({resource, resourceRelationships});
+
+            return accumulator;
+          }, []);
       });
   }
 

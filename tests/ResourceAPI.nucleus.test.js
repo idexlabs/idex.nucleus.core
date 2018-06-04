@@ -298,7 +298,7 @@ mocha.suite("Nucleus Resource API", function () {
 
   });
 
-  mocha.suite("Persistent storage", function () {
+  mocha.suite.only("Persistent storage", function () {
     const resourceType = 'Dummy';
 
     class DummyResourceModel extends NucleusResource {
@@ -856,7 +856,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite.skip("Retrieve all performance", function () {
+    mocha.suite.only("Retrieve all performance", function () {
       const dummyCountList = [ 50, 200, 400, 800, 1600 ];
 
       // Original benchmark is 200 items retrieved in 19 seconds.
@@ -893,6 +893,8 @@ mocha.suite("Nucleus Resource API", function () {
 
                   const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
+                  console.time(`Retrieve all (${attemptCount} attempt(s))`);
+
                   return NucleusResourceAPI.retrieveAllResourcesByType.call({ $datastore, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, originUserID)
                     .then(({ resourceList }) => {
                       // The user retrieve 202 dummies.
@@ -902,6 +904,8 @@ mocha.suite("Nucleus Resource API", function () {
                       chai.expect(resourceList[0]).to.have.property('resourceRelationships');
                       chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-authored-by');
                       chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-member-of');
+
+                      console.timeEnd(`Retrieve all (${attemptCount} attempt(s))`);
                     })
                     .then(() => {
 

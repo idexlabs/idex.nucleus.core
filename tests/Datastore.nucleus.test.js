@@ -66,7 +66,7 @@ mocha.suite("Nucleus Datastore", function () {
     return Promise.resolve();
   });
 
-  mocha.suite.only("#collapseObjectToDotNotation", function () {
+  mocha.suite("#collapseObjectToDotNotation", function () {
 
     mocha.test("Collapse object dot notation", function () {
       const collapsedObject = NucleusDatastore.collapseObjectToDotNotation({
@@ -100,7 +100,7 @@ mocha.suite("Nucleus Datastore", function () {
 
   });
 
-  mocha.suite.only("#expandDotNotationObject", function () {
+  mocha.suite("#expandDotNotationObject", function () {
 
     mocha.test("Expands dot notation object", function () {
       const expandedObject = NucleusDatastore.expandDotNotationObject({
