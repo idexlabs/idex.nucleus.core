@@ -167,7 +167,7 @@ class NucleusResourceAPI {
       .then(() => {
         if (!$resourceRelationshipDatastore) return;
 
-        return $resourceRelationshipDatastore.removeAllRelationshipsToVector(resourceID);
+        return $resourceRelationshipDatastore.removeAllRelationshipsToVector({ ID: resourceID, type: resourceType });
       })
       .return({ resourceID });
   }

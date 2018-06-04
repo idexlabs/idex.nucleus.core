@@ -54,11 +54,16 @@ class NucleusResourceRelationshipDatastore {
   /**
    * Removes all relationship to the vector.
    *
-   * @argument {String} vector
+   * @argument {Node} vector
    *
    * @returns {Promise<Object[]>}
    */
   removeAllRelationshipsToVector (vector) {
+    if (nucleusValidator.isObject(vector)) {
+      const stringifiedAnchorNode = `${vector.type}-${vector.ID}`;vector
+
+      return this.removeAllRelationshipsToVector(stringifiedAnchorNode);
+    }
 
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
   }

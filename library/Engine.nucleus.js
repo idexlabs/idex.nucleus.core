@@ -371,6 +371,8 @@ class NucleusEngine {
     } catch (error) {
       if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { error });
 
+      this.$logger.error(error);
+
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
       await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);

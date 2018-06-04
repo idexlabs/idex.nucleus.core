@@ -51,3 +51,5 @@ for index, tripple in pairs(OPSTrippleList) do
 
     removeTripple(itemKey, subject, predicate, object)
 end
+
+return { SPOTrippleList, OPSTrippleList }
