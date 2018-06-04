@@ -570,7 +570,7 @@ mocha.suite("Nucleus Resource API", function () {
           .then(() => {
             chai.expect($$datastoreRemoveItemByNameSpy.calledOnceWith(
               NucleusResource.generateItemKey(resourceType, resourceID)
-            ));
+            )).to.be.true;
           });
       });
 
@@ -588,9 +588,10 @@ mocha.suite("Nucleus Resource API", function () {
 
         return NucleusResourceAPI.removeResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, resourceID, authorUserID)
           .then(() => {
-            chai.expect($$resourceRelationshipDatastoreRemoveAllRelationshipsToVectorSpy.calledOnceWith(
-              resourceType
-            ));
+            chai.expect($$resourceRelationshipDatastoreRemoveAllRelationshipsToVectorSpy.calledWith({
+              ID: resourceID,
+              type: resourceType
+            })).to.be.true;
           });
       });
 
@@ -631,7 +632,7 @@ mocha.suite("Nucleus Resource API", function () {
           .then(() => {
             chai.expect($$datastoreRetrieveAllItemsFromHashByNameSpy.calledOnceWith(
               NucleusResource.generateItemKey(resourceType, resourceID)
-            ));
+            )).to.be.true;
           });
       });
 
@@ -771,6 +772,90 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
+    mocha.suite("#updatesResourceByID", function () {
+
+      mocha.test("The dummy resource is updated to the datastore.", async function () {
+        const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
+        const $$datastoreRetrieveAllItemsFromHashByNameSpy = $$sandbox.spy($datastore, 'retrieveAllItemsFromHashByName');
+        const $$datastoreAddItemToHashFieldByNameSpy = $$sandbox.spy($datastore, 'addItemToHashFieldByName');
+
+        const dummyAttributes = {
+          name: `Dummy ${uuid.v4()}`
+        };
+        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
+
+        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
+
+        const dummyAttributesToUpdate = {
+          name: `Dummy ${uuid.v4()}`
+        };
+
+        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
+          .then(({ resource }) => {
+            chai.expect(resource).to.deep.include({
+              ID: resourceID,
+              name: dummyAttributesToUpdate.name,
+              type: resourceType
+            });
+
+            chai.expect(resource.meta).to.have.ownProperty('updatedISOTime');
+
+            chai.expect($$datastoreRetrieveAllItemsFromHashByNameSpy.calledOnceWith(
+              NucleusResource.generateItemKey(resourceType, resourceID)
+            )).to.be.true;
+            chai.expect($$datastoreAddItemToHashFieldByNameSpy.calledWith(
+              NucleusResource.generateItemKey(resourceType, resourceID),
+              sinon.match({
+                meta: sinon.match({
+                  updatedISOTime: sinon.match.string
+                }),
+                name: dummyAttributesToUpdate.name
+              })
+            )).to.be.true;
+          });
+      });
+
+      mocha.test("The resource relationships are returned.", async function () {
+        const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
+
+        const dummyAttributes = {
+          name: `Dummy ${uuid.v4()}`
+        };
+        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
+
+        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
+
+        const dummyAttributesToUpdate = {
+          name: `Dummy ${uuid.v4()}`
+        };
+
+        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
+          .then(({ resource, resourceRelationships }) => {
+            chai.expect(resourceRelationships).to.be.an('object');
+          });
+      });
+
+      mocha.test("The dummy resource can't be updated by a user from another branch.", async function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        const dummyAttributes = {
+          name: `Dummy ${uuid.v4()}`
+        };
+        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
+
+        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
+
+        const originUserID = '1c76c8d1-8cdc-4c40-8132-36f657b5bf69';
+
+        chai.expect(NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, { name: `Dummy ${uuid.v4()}` }, originUserID))
+          .to.be.rejectedWith(NucleusError.UnauthorizedActionNucleusError);
+      });
+
+    });
+
     mocha.suite.skip("Retrieve all performance", function () {
       const dummyCountList = [ 50, 200, 400, 800, 1600 ];
 
@@ -833,90 +918,6 @@ mocha.suite("Nucleus Resource API", function () {
           });
 
         });
-
-    });
-
-    mocha.suite("#updatesResourceByID", function () {
-
-      mocha.test("The dummy resource is updated to the datastore.", async function () {
-        const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
-        const $$datastoreRetrieveAllItemsFromHashByNameSpy = $$sandbox.spy($datastore, 'retrieveAllItemsFromHashByName');
-        const $$datastoreAddItemToHashFieldByNameSpy = $$sandbox.spy($datastore, 'addItemToHashFieldByName');
-
-        const dummyAttributes = {
-          name: `Dummy ${uuid.v4()}`
-        };
-        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
-        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
-
-        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
-
-        const dummyAttributesToUpdate = {
-          name: `Dummy ${uuid.v4()}`
-        };
-
-        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
-          .then(({ resource }) => {
-            chai.expect(resource).to.deep.include({
-              ID: resourceID,
-              name: dummyAttributesToUpdate.name,
-              type: resourceType
-            });
-
-            chai.expect(resource.meta).to.have.ownProperty('updatedISOTime');
-
-            chai.expect($$datastoreRetrieveAllItemsFromHashByNameSpy.calledOnceWith(
-              NucleusResource.generateItemKey(resourceType, resourceID)
-            ));
-            chai.expect($$datastoreAddItemToHashFieldByNameSpy.calledOnceWith(
-              NucleusResource.generateItemKey(resourceType, resourceID),
-              sinon.match({
-                meta: sinon.match({
-                  updatedISOTime: sinon.match.string
-                }),
-                name: dummyAttributesToUpdate.name
-              })
-            ));
-          });
-      });
-
-      mocha.test("The resource relationships are returned.", async function () {
-        const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
-
-        const dummyAttributes = {
-          name: `Dummy ${uuid.v4()}`
-        };
-        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
-        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
-
-        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
-
-        const dummyAttributesToUpdate = {
-          name: `Dummy ${uuid.v4()}`
-        };
-
-        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
-          .then(({ resource, resourceRelationships }) => {
-            chai.expect(resourceRelationships).to.be.an('object');
-          });
-      });
-
-      mocha.test("The dummy resource can't be updated by a user from another branch.", async function () {
-        const { $datastore, $resourceRelationshipDatastore } = this;
-
-        const dummyAttributes = {
-          name: `Dummy ${uuid.v4()}`
-        };
-        const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
-        const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
-
-        const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
-
-        const originUserID = '1c76c8d1-8cdc-4c40-8132-36f657b5bf69';
-
-        chai.expect(NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, { name: `Dummy ${uuid.v4()}` }, originUserID))
-          .to.be.rejectedWith(NucleusError.UnauthorizedActionNucleusError);
-      });
 
     });
 

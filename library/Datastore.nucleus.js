@@ -694,31 +694,63 @@ class NucleusDatastore {
     return this.$$server.unsubscribeAsync(channelName);
   }
 
-  // static collapseObjectToDotNotation (object) {
-  //
-  //   return Object.keys(object)
-  //     .reduce((accumulator, propertyName) => {
-  //       const value = object[propertyName];
-  //
-  //       if (nucleusValidator.isObject(value)) {
-  //         propertyName = propertyName
-  //           .reduce((accumulator, propertyName, index, list) => {
-  //             if (index + 1 !== list.length) {
-  //               if (!(propertyName in accumulator)) accumulator[propertyName] = {};
-  //
-  //               return accumulator[propertyName];
-  //             } else {
-  //               accumulator[propertyName] = (value === null) ? undefined : value;
-  //
-  //               return accumulator;
-  //             }
-  //           }, object);
-  //       } else accumulator[propertyName] = value;
-  //
-  //       return accumulator;
-  //     }, {});
-  // }
+  /**
+   * Collaps an object to a dot notation object.
+   * @example
+   * const collapsedObject = NucleusDatastore.collapseObjectToDotNotation({ a: { b: 'B' } });
+   * collapsedObject['a.b'] === 'B';
+   *
+   * @argument {Object} object
+   *
+   * @returns {Object}
+   */
+  static collapseObjectToDotNotation (object) {
 
+    function reduceObject (propertyNamePath, accumulator, object) {
+      Object.keys(object)
+        .forEach((propertyName, index) => {
+          const value = object[propertyName];
+
+          reduceValue(`${propertyNamePath}.${propertyName}`, accumulator, value);
+        });
+    }
+
+    function reduceArray (propertyNamePath, accumulator, array) {
+      array
+        .forEach((value, index) => {
+          reduceValue(`${propertyNamePath}[${index}]`, accumulator, value);
+        });
+    }
+
+    function reduceValue (propertyNamePath, accumulator, value) {
+      if (nucleusValidator.isObject(value)) return reduceObject(propertyNamePath, accumulator, value);
+      if (nucleusValidator.isArray(value)) return reduceArray(propertyNamePath, accumulator, value);
+
+      accumulator[propertyNamePath] = value;
+
+      return accumulator;
+    }
+
+    return Object.keys(object)
+      .reduce((accumulator, propertyName) => {
+        const value = object[propertyName];
+
+        reduceValue(propertyName, accumulator, value);
+
+        return accumulator;
+      }, {});
+  }
+
+  /**
+   * Expands a dot notation object.
+   * @example
+   * const expandedObject = NucleusDatastore.expandDotNotationObject({ 'a.b': 'B' });
+   * expandedObject.a.b === 'B';
+   *
+   * @argument {Object} object
+   *
+   * @returns {Object}
+   */
   static expandDotNotationObject (object) {
 
     return Object.keys(object)
@@ -730,7 +762,10 @@ class NucleusDatastore {
           dotNotationPropertyList
             .reduce((accumulator, propertyName, index, list) => {
               if (index + 1 !== list.length) {
-                if (!(propertyName in accumulator)) accumulator[propertyName] = {};
+                if (!(propertyName in accumulator)) {
+                  // TODO: Handle array
+                  accumulator[propertyName] = {};
+                }
 
                 return accumulator[propertyName];
               } else {

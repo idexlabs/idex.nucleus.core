@@ -66,45 +66,58 @@ mocha.suite("Nucleus Datastore", function () {
     return Promise.resolve();
   });
 
-  // mocha.suite.only("#collapseObjectToDotNotation", function () {
-  //
-  //   mocha.test("Collapse object dot notation", function () {
-  //     const collapsedObject = NucleusDatastore.collapseObjectToDotNotation({
-  //       a: {
-  //         b: {
-  //           c: 'C',
-  //           d: 'D'
-  //         }
-  //       },
-  //       f: {
-  //         g: {
-  //           h: 'H'
-  //         }
-  //       }
-  //     });
-  //
-  //     chai.expect(collapsedObject['a.b.c']).to.equal('C');
-  //     chai.expect(collapsedObject['a.b.d']).to.equal('D');
-  //     chai.expect(collapsedObject['a.b.e']).to.equal('E');
-  //     chai.expect(collapsedObject['f.g.h']).to.equal('H');
-  //   });
-  //
-  // });
+  mocha.suite.only("#collapseObjectToDotNotation", function () {
 
-  mocha.suite("#expandDotNotationObject", function () {
+    mocha.test("Collapse object dot notation", function () {
+      const collapsedObject = NucleusDatastore.collapseObjectToDotNotation({
+        a: {
+          b: {
+            c: 'C',
+            d: 'D'
+          }
+        },
+        f: {
+          g: {
+            h: 'H'
+          }
+        },
+        i: [
+          'I'
+        ],
+        j: [
+          {
+            k: 'K'
+          }
+        ]
+      });
+
+      chai.expect(collapsedObject['a.b.c']).to.equal('C');
+      chai.expect(collapsedObject['a.b.d']).to.equal('D');
+      chai.expect(collapsedObject['f.g.h']).to.equal('H');
+      chai.expect(collapsedObject['i[0]']).to.equal('I');
+      chai.expect(collapsedObject['j[0].k']).to.equal('K');
+    });
+
+  });
+
+  mocha.suite.only("#expandDotNotationObject", function () {
 
     mocha.test("Expands dot notation object", function () {
       const expandedObject = NucleusDatastore.expandDotNotationObject({
         'a.b.c': 'C',
         'a.b.d': 'D',
         'a.b.e': 'E',
-        'f.g.h': 'H'
+        'f.g.h': 'H',
+        'i[0]': 'I',
+        'j[0].k': 'K'
       });
 
       chai.expect(expandedObject.a.b.c).to.equal('C');
       chai.expect(expandedObject.a.b.d).to.equal('D');
       chai.expect(expandedObject.a.b.e).to.equal('E');
       chai.expect(expandedObject.f.g.h).to.equal('H');
+      chai.expect(expandedObject.i[0]).to.equal('I');
+      chai.expect(expandedObject.i[0].k).to.equal('K');
     });
 
     mocha.test("Expands dot notation object2", function () {
