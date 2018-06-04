@@ -1,6 +1,6 @@
 {
   "name": "idex.nucleus",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "A flexible library to implement a distributed micro-service(-like) architecture in NodeJS.",
   "keywords": [
     "library",
