@@ -111,6 +111,7 @@ class NucleusEngine {
       // If the `automaticallyAutodiscover` flag is true, pass the engine directory path that should be set from the parent class.
       .then(() => { if (automaticallyAutodiscover) return this.autodiscover(this.engineDirectoryPath); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
+      .then(this.fixDatastoreIssues.bind(this))
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
@@ -353,15 +354,16 @@ class NucleusEngine {
       $action.updateMessage(actionResponse);
       await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status, 'finalMessage', $action.finalMessage);
 
+      // Temporarily removed because the events keys are kept but never handled and becomes stale.
       // Send event to action channel.
-      const $event = new NucleusEvent('ActionStatusUpdated', {
-        actionFinalMessage: actionResponse,
-        actionID,
-        actionName,
-        actionStatus: 'Completed'
-      });
+      // const $event = new NucleusEvent('ActionStatusUpdated', {
+      //   actionFinalMessage: actionResponse,
+      //   actionID,
+      //   actionName,
+      //   actionStatus: 'Completed'
+      // });
 
-      await this.publishEventToChannelByName(`Action:${actionID}`, $event);
+      // await this.publishEventToChannelByName(`Action:${actionID}`, $event);
 
       this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName });
 
@@ -414,6 +416,24 @@ class NucleusEngine {
         {$datastore: this.$datastore, $logger: this.$logger }, argumentList);
 
     return actionResponse;
+  }
+
+  /**
+   * Fixes issues with the datastore; trying to normalize the data to avoid flushing everything when a change is made.
+   *
+   * @returns {Promise}
+   */
+  async fixDatastoreIssues() {
+    // https://github.com/sebastienfilion/idex.nucleus/issues/3
+    // The issue was due to action event being expired but not the channel event set used to manage event control flow.
+    this.$logger.debug(`Removing old stale action channel ordered set. https://github.com/sebastienfilion/idex.nucleus/issues/3`);
+    await this.$eventDatastore.evaluateLUAScript(`
+local actionOrderedSetList = redis.call('KEYS', 'Action:*')
+
+for index, itemKey in pairs(actionOrderedSetList) do
+  redis.call('DEL', itemKey)
+end
+    `);
   }
 
   /**
