@@ -268,7 +268,7 @@ class NucleusResourceAPI {
 
       case 'CurrentNodeDescent':
       {
-        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
+        const userCurrentNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
         const userCurrentNodeChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userCurrentNodeList[0]);
 
         userCurrentNodeList.slice(0).concat(userCurrentNodeChildrenNodeList)
@@ -278,7 +278,7 @@ class NucleusResourceAPI {
 
       case 'CurrentNode':
       {
-        const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
+        const userCurrentNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
 
         anchorNodeIsList.push(userCurrentNodeList);
       }
