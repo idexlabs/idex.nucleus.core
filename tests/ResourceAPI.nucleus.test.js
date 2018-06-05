@@ -854,6 +854,53 @@ mocha.suite("Nucleus Resource API", function () {
           .to.be.rejectedWith(NucleusError.UnauthorizedActionNucleusError);
       });
 
+      mocha.suite.only("Intermitent update", function () {
+        // Test for an issue reported on a resource becoming "unupdatable" after a few edits.
+
+        mocha.test("The resource is updated and retrieved multiple times.", async function () {
+          const { $datastore, $resourceRelationshipDatastore } = this;
+
+          const dummyAttributes = {
+            name: `Dummy ${uuid.v4()}`
+          };
+          const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+          const groupID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
+
+          const { resource: { ID: resourceID } } = await NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID, 'Group', groupID);
+
+          const dummyAttributesToUpdate = {
+            name: `Dummy ${uuid.v4()}`
+          };
+
+          return Promise.resolve(NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.retrieveResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+              name: `Dummy ${uuid.v4()}`
+            }, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.retrieveAllResourcesByType.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, authorUserID, 'TopNodeDescent'))
+            .delay(2000)
+            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+              name: `Dummy ${uuid.v4()}`
+            }, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.retrieveResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+              name: `Dummy ${uuid.v4()}`
+            }, authorUserID))
+            .delay(2000)
+            .then(NucleusResourceAPI.retrieveAllResourcesByType.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, authorUserID, 'TopNodeDescent'))
+            .delay(2000)
+            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+              name: `Dummy ${uuid.v4()}`
+            }, authorUserID));
+        });
+
+      });
+
     });
 
     mocha.suite.skip("Retrieve all performance", function () {

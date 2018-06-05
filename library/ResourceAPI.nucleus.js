@@ -276,7 +276,7 @@ class NucleusResourceAPI {
       }
         break;
 
-      case 'CurrentNodeDescent':
+      case 'CurrentNode':
       {
         const userCurrentNodeList = await await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${originUserID}`, 'is-member-of');
 
