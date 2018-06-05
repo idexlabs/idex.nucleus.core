@@ -298,7 +298,7 @@ mocha.suite("Nucleus Resource API", function () {
 
   });
 
-  mocha.suite.only("Persistent storage", function () {
+  mocha.suite("Persistent storage", function () {
     const resourceType = 'Dummy';
 
     class DummyResourceModel extends NucleusResource {
@@ -856,7 +856,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite.only("Retrieve all performance", function () {
+    mocha.suite.skip("Retrieve all performance", function () {
       const dummyCountList = [ 50, 200, 400, 800, 1600 ];
 
       // Original benchmark is 200 items retrieved in 19 seconds.
