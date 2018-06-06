@@ -240,7 +240,7 @@ class NucleusResourceAPI {
   /**
    * Retrieves a resource given its ID.
    *
-   * @Nucleus ActionName RetrieveResourceByID
+   * @Nucleus ActionName RetrieveBatchResourceByIDList
    * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
    * @Nucleus ExtendableActionName `RetrieveBatch${resourceType}ByIDList`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}IDList` 'originUserID'

@@ -615,14 +615,17 @@ end
         }
 
       });
-
-      try {
-        process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
-      } catch (error) {
-
-        reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
-      }
     });
+
+    if (!actionName) throw new NucleusError.UndefinedContextNucleusError(`Can't publish action "${actionName}" because the action queue couldn't be retrieved.`);
+
+    try {
+
+      process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
+    } catch (error) {
+
+      reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
+    }
 
     return Promise.resolve($$actionResponsePromise);
   }
