@@ -854,7 +854,7 @@ mocha.suite("Nucleus Resource API", function () {
           .to.be.rejectedWith(NucleusError.UnauthorizedActionNucleusError);
       });
 
-      mocha.suite.only("Intermitent update", function () {
+      mocha.suite("Intermitent update", function () {
         // Test for an issue reported on a resource becoming "unupdatable" after a few edits.
 
         mocha.test("The resource is updated and retrieved multiple times.", async function () {

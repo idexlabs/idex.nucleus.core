@@ -566,6 +566,9 @@ class NucleusResourceAPI {
     if (!$resourceRelationshipDatastore) return { canUpdateResource: true };
 
     const userDirectAncestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(`User-${userID}`, 'is-member-of');
+
+    if (userDirectAncestorNodeList[0].type === resourceType && userDirectAncestorNodeList[0].ID === resourceID) return { canUpdateResource: true };
+
     const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userDirectAncestorNodeList[0]);
     const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: resourceID, type: resourceType });
 
