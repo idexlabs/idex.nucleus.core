@@ -248,7 +248,7 @@ class NucleusResourceAPI {
    *
    * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel
-   * @argument {String} resourceIDList
+   * @argument {String[]} resourceIDList
    * @argument {String} originUserID
    *
    * @returns {Promise<{ resourceList: Object[] }>}
