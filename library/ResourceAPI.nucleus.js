@@ -178,7 +178,6 @@ class NucleusResourceAPI {
    * @Nucleus ActionName RetrieveResourceByID
    * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
    * @Nucleus ExtendableActionName `Retrieve${resourceType}ByID`
-   * @Nucleus ExtendableEventName `${resourceType}ByIDRetrieved`
    * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
    * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
    *
@@ -235,6 +234,87 @@ class NucleusResourceAPI {
           }, {});
 
         return { resource: $resource, resourceRelationships };
+      });
+  }
+
+  /**
+   * Retrieves a resource given its ID.
+   *
+   * @Nucleus ActionName RetrieveResourceByID
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
+   * @Nucleus ExtendableActionName `RetrieveBatch${resourceType}ByIDList`
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}IDList` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
+   *
+   * @argument {String} resourceType
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} resourceIDList
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<{ resourceList: Object[] }>}
+   *
+   * @throws Will throw an error if the resource type is not a string.
+   * @throws Will throw an error if the resource model is not an instance of NucleusResource.
+   * @throws Will throw an error if the resource ID is not a string.
+   * @throws Will throw an error if the origin user ID is not a string.
+   * @throws Will throw an error if no datastore is passed.
+   * @throws Will throw an error if the origin user is not authorized to retrieve the resource.
+   * @throws Will throw an error if the resource does not exist.
+   */
+  static retrieveBatchResourceByIDList (resourceType, NucleusResourceModel, resourceIDList, originUserID) {
+    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
+    if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
+    if (!nucleusValidator.isArray(resourceIDList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID list must be an array.");
+    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
+
+    const resourceItemList = resourceIDList
+      .map((resourceID) => {
+
+        return NucleusResource.generateItemKey(resourceType, resourceID);
+      });
+
+    const itemDatastoreRequestList = resourceItemList
+      .map((itemKey) => {
+
+        return ['HGETALL', itemKey];
+      });
+
+    const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
+      .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+
+    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(resourceIDList
+      .map((resourceID) => {
+
+        return { ID: resourceID, type: resourceType };
+      }));
+
+    return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
+      .then(([resourceList, nodeRelationshipListList]) => {
+
+        return resourceList
+          .reduce((accumulator, resource, index) => {
+            const nodeRelationshipList = nodeRelationshipListList[index];
+
+            const resourceRelationships = nodeRelationshipList
+              .reduce((accumulator, {predicate: relationship, object: {ID: resourceID, type: resourceType}}) => {
+                if (!('relationship' in accumulator)) accumulator[relationship] = [];
+                accumulator[relationship].push({relationship, resourceID, resourceType});
+
+                return accumulator;
+              }, {});
+
+            accumulator.push({resource, resourceRelationships});
+
+            return accumulator;
+          }, []);
+      })
+      .then((resourceList) => {
+
+        return { resourceList };
       });
   }
 
@@ -349,7 +429,7 @@ class NucleusResourceAPI {
    * @argument {String} originUserID
    * @argument {String} [walkHierarchyTreeMethod]
    *
-   * @returns {Promise<{ resourceList: NucleusResource[] }>}
+   * @returns {Promise<{ resourceList: Object[] }>}
    *
    * @throws Will throw an error if the resource type is not a string.
    * @throws Will throw an error if the origin user ID is not a string.
@@ -361,21 +441,12 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    console.time(`Retrieve all ${resourceType} for ${originUserID}`);
-    console.time(`Retrieve all ${resourceType} nodes for ${originUserID}`);
-
     return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
 
-        console.timeEnd(`Retrieve all ${resourceType} nodes for ${originUserID}`);
-        console.time(`Extend ${resourceType} nodes`);
         return NucleusResourceAPI.extendNodeList.call({ $datastore, $resourceRelationshipDatastore }, nodeList, NucleusResourceModel, originUserID);
       })
       .then((resourceList) => {
-
-        console.timeEnd(`Extend ${resourceType} nodes`);
-
-        console.timeEnd(`Retrieve all ${resourceType} for ${originUserID}`);
 
         return { resourceList };
       });

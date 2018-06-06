@@ -772,6 +772,46 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
+    mocha.suite.only("#retrieveBatchResourceByIDList", function () {
+
+      mocha.setup(function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        // Creating 4 dummies, in 3 different groups by 2 different users.
+        return Promise.all([
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '22d969f8-ef02-4e31-ae5f-24f9e864a390', name: 'Dummy 22d969f8-ef02-4e31-ae5f-24f9e864a390' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: 'b1947406-cdad-4c5c-9c44-8a544221b318', name: 'Dummy b1947406-cdad-4c5c-9c44-8a544221b318' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '84247275-311c-4858-9dab-f94c655e2b34', name: 'Dummy 84247275-311c-4858-9dab-f94c655e2b34' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '0b585001-5262-4a53-9007-d5cbc287f8ee', name: 'Dummy 0b585001-5262-4a53-9007-d5cbc287f8ee' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5')
+        ]);
+      });
+
+      mocha.test("All the dummy resources are retrieved.", function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+
+        return NucleusResourceAPI.retrieveBatchResourceByIDList.call({ $datastore, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, [
+          '22d969f8-ef02-4e31-ae5f-24f9e864a390',
+          'b1947406-cdad-4c5c-9c44-8a544221b318',
+          '84247275-311c-4858-9dab-f94c655e2b34',
+          '0b585001-5262-4a53-9007-d5cbc287f8ee'
+        ], originUserID)
+          .then(({ resourceList }) => {
+            chai.expect(resourceList).to.have.length(4);
+            chai.expect(resourceList).to.have.nested.property('[0].resource.ID', '22d969f8-ef02-4e31-ae5f-24f9e864a390');
+            chai.expect(resourceList).to.have.nested.property('[0].resource.type', 'Dummy');
+            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+            chai.expect(resourceList).to.have.nested.property('[1].resource.ID', 'b1947406-cdad-4c5c-9c44-8a544221b318');
+            chai.expect(resourceList).to.have.nested.property('[1].resource.type', 'Dummy');
+            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+          });
+      });
+
+    });
+
     mocha.suite("#updatesResourceByID", function () {
 
       mocha.test("The dummy resource is updated to the datastore.", async function () {
