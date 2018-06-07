@@ -772,7 +772,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite.only("#retrieveBatchResourceByIDList", function () {
+    mocha.suite("#retrieveBatchResourceByIDList", function () {
 
       mocha.setup(function () {
         const { $datastore, $resourceRelationshipDatastore } = this;

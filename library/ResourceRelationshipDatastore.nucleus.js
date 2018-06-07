@@ -52,17 +52,37 @@ class NucleusResourceRelationshipDatastore {
   }
 
   /**
+   * Removes a relationship between a subject and an object.
+   *
+   * @argument {String|Node} subject
+   * @argument {String|Node} predicate
+   * @argument {String|Node} object
+   *
+   * @returns {Promise}
+   */
+  removeRelationship (subject, predicate, object) {
+    if (nucleusValidator.isObject(subject) || nucleusValidator.isObject(object)) {
+      const stringifiedSubjectNode = (nucleusValidator.isObject(subject)) ? `${subject.type}-${subject.ID}` : subject;
+      const stringifiedObjectNode = (nucleusValidator.isObject(object)) ? `${object.type}-${object.ID}` : object;
+
+      return this.removeRelationships(stringifiedSubjectNode, predicate, stringifiedObjectNode);
+    }
+
+    return this.$datastore.removeTriplesFromHexastore('ResourceRelationship', subject, predicate, object);
+  }
+
+  /**
    * Removes all relationship to the vector.
    *
-   * @argument {Node} vector
+   * @argument {String|Node} vector
    *
-   * @returns {Promise<Object[]>}
+   * @returns {Promise}
    */
   removeAllRelationshipsToVector (vector) {
     if (nucleusValidator.isObject(vector)) {
-      const stringifiedAnchorNode = `${vector.type}-${vector.ID}`;vector
+      const stringifiedNode = `${vector.type}-${vector.ID}`;vector
 
-      return this.removeAllRelationshipsToVector(stringifiedAnchorNode);
+      return this.removeAllRelationshipsToVector(stringifiedNode);
     }
 
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);

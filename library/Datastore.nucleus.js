@@ -379,6 +379,22 @@ class NucleusDatastore {
     }
   }
 
+  removeTriplesFromHexastore (itemKey, subject, predicate, object) {
+    if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
+    if (!nucleusValidator.isString(subject)) throw new NucleusError.UnexpectedValueTypeNucleusError("The subject must be a string.");
+    if (!nucleusValidator.isString(predicate)) throw new NucleusError.UnexpectedValueTypeNucleusError("The predicate must be a string.");
+    if (!nucleusValidator.isString(object)) throw new NucleusError.UnexpectedValueTypeNucleusError("The object must be a string.");
+
+    return this.multi()
+      .zrem(itemKey, `SPO:${subject}:${predicate}:${object}`)
+      .zrem(itemKey, `SOP:${subject}:${object}:${predicate}`)
+      .zrem(itemKey, `OPS:${object}:${predicate}:${subject}`)
+      .zrem(itemKey, `OSP:${object}:${subject}:${predicate}`)
+      .zrem(itemKey, `PSO:${predicate}:${subject}:${object}`)
+      .zrem(itemKey, `POS:${predicate}:${object}:${subject}`)
+      .execAsync();
+  }
+
   /**
    * Removes a triple from a hexastore given the subject vector.
    * This will remove every relationship where the given vector is subject or object.
