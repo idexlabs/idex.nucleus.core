@@ -41,6 +41,8 @@ class PublisherEngine {
 
 }
 
+PublisherEngine.prototype.handleActionChannelRedisEvent = NucleusEngine.prototype.handleActionChannelRedisEvent;
+PublisherEngine.prototype.handleActionStatusUpdated = NucleusEngine.prototype.handleActionStatusUpdated;
 PublisherEngine.prototype.publishActionByNameAndHandleResponse = NucleusEngine.prototype.publishActionByNameAndHandleResponse;
 PublisherEngine.prototype.publishActionToQueueByName = NucleusEngine.prototype.publishActionToQueueByName;
 
