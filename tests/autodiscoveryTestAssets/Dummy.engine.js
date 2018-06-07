@@ -84,6 +84,20 @@ class DummyEngine extends NucleusEngine {
     return Promise.resolve();
   }
 
+  /**
+   * Executes a simple dummy.
+   *
+   * @Nucleus ActionName ExecuteSimpleDummyWithRandomExecutionTime
+   *
+   * @returns {Promise<void>}
+   */
+  executeSimpleDummyWithRandomExecutionTime () {
+
+    return new Promise(resolve => {
+      setTimeout(resolve.bind(null, { AID: uuid.v1() }), Math.floor(Math.random() * 1000 - 100 + 1) + 100);
+    });
+  }
+
 }
 
 module.exports = DummyEngine;

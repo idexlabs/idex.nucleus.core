@@ -78,6 +78,7 @@ class NucleusEngine {
       automaticallyManageResourceRelationship = false,
       automaticallyRetrievePendingActions = false,
       debounceActionExecution = true,
+      defautlActionHangupTimeout = 1000 * 5,
       defaultActionQueueName = engineName
     } = options;
 
@@ -88,6 +89,7 @@ class NucleusEngine {
 
     // Debouncing the action execution allows a performance gain of 20% on heavy request load.
     this.debounceActionExecution = debounceActionExecution;
+    this.defautlActionHangupTimeout = defautlActionHangupTimeout;
     this.defaultActionQueueName = defaultActionQueueName;
 
     this.$actionDatastore = $actionDatastore;
@@ -565,7 +567,7 @@ end
    *
    * @returns {Promise<Object>}
    */
-  async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, originUserID) {
+  async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, originUserID, actionHangupTimeout = this.defautlActionHangupTimeout) {
     if (!nucleusValidator.isString(actionName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action name must be a string.");
     if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
@@ -584,50 +586,76 @@ end
       await $actionSubscriberDatastore;
 
       const channelName = `__keyspace@${actionDatastoreIndex}__:${actionItemKey}`;
+
+      $actionSubscriberDatastore.handleEventByChannelName(channelName, this.handleActionChannelRedisEvent.bind(this, $actionSubscriberDatastore, resolve, reject));
+
       await $actionSubscriberDatastore.subscribeToChannelName(channelName);
 
-      $actionSubscriberDatastore.handleEventByChannelName(channelName, async (channelPattern, redisCommand) => {
-        if (redisCommand !== 'hset' && redisCommand !== 'hmset') return;
+      if (!actionName) throw new NucleusError.UndefinedContextNucleusError(`Can't publish action "${actionName}" because the action queue couldn't be retrieved.`);
 
-        const [ keyspace, itemType, actionName, actionID ] = channelPattern.split(':');
-        const actionItemKey = `${itemType}:${actionName}:${actionID}`;
+      try {
 
-        try {
-          const [ actionFinalMessage, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName(actionItemKey, 'finalMessage', 'status');
+        process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
+      } catch (error) {
 
-          if (actionStatus === NucleusAction.CompletedActionStatus || actionStatus === NucleusAction.FailedActionStatus) {
-            this.$logger.debug(`The action "${actionName} (${actionID})" status has been updated to "${actionStatus}".`);
-            // Resolve or reject the promise with the final message base on the action's status.
-            if (actionStatus === NucleusAction.CompletedActionStatus) resolve(actionFinalMessage);
-            else if ('error' in actionFinalMessage) {
-              const errorAttributes = actionFinalMessage.error;
-              const NucleusErrorType = (Object.keys(NucleusError).includes(errorAttributes.name)) ? NucleusError[errorAttributes.name] : NucleusError;
-
-              reject(new NucleusErrorType(errorAttributes.message, { error: errorAttributes }));
-            }
-            ((actionStatus === NucleusAction.CompletedActionStatus) ? resolve : reject)(actionFinalMessage);
-
-            $actionSubscriberDatastore.unsubscribeFromChannelName(channelName);
-          }
-        } catch (error) {
-
-          reject(new NucleusError(`Could not handle the action's response because of an external error: ${error}`, { error }));
-        }
-
-      });
+        reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
+      }
     });
 
-    if (!actionName) throw new NucleusError.UndefinedContextNucleusError(`Can't publish action "${actionName}" because the action queue couldn't be retrieved.`);
+    return Promise.resolve($$actionResponsePromise);
+      // .timeout(actionHangupTimeout, "Action listener timed-out.")
+      // .catch(async (error) => {
+      //   const { name } = error;
+      //
+      //   if (!name && name !== 'TimeoutError') return Promise.reject(error);
+      //
+      //   const [ actionID, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName($action.generateOwnItemKey(), 'ID', 'status');
+      //
+      //   console.log("=== Timeout", actionID, actionStatus);
+      //   return this.handleActionStatusUpdated($action.generateOwnItemKey(), $action.ID, $action.name);
+      // });
+  }
+
+  async handleActionChannelRedisEvent ($actionSubscriberDatastore, resolve, reject, channelName, redisCommand) {
+    if (redisCommand !== 'hset' && redisCommand !== 'hmset') return;
 
     try {
+      const [ keyspace, itemType, actionName, actionID ] = channelName.split(':');
+      const actionItemKey = `${itemType}:${actionName}:${actionID}`;
 
-      process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
+      const { actionStatus } = await this.handleActionStatusUpdated(actionItemKey, actionID, actionName, resolve, reject);
+
+      if (actionStatus === NucleusAction.CompletedActionStatus || actionStatus === NucleusAction.FailedActionStatus) {
+        $actionSubscriberDatastore.unsubscribeFromChannelName(channelName);
+      }
+
     } catch (error) {
 
-      reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
+      reject(new NucleusError(`Could not handle the action's response because of an external error: ${error}`, { error }));
+    }
+  }
+
+  async handleActionStatusUpdated (actionItemKey, actionID, actionName, resolve, reject) {
+    const [ actionFinalMessage, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName(actionItemKey, 'finalMessage', 'status');
+
+    if (actionStatus === NucleusAction.CompletedActionStatus || actionStatus === NucleusAction.FailedActionStatus) {
+      this.$logger.debug(`The action "${actionName} (${actionID})" status has been updated to "${actionStatus}".`);
+      // Resolve or reject the promise with the final message base on the action's status.
+      if (actionStatus === NucleusAction.CompletedActionStatus) {
+        if (resolve) resolve(actionFinalMessage);
+        return Promise.resolve({ actionStatus, actionFinalMessage });
+      }
+      else if ('error' in actionFinalMessage) {
+        const errorAttributes = actionFinalMessage.error;
+        const NucleusErrorType = (Object.keys(NucleusError).includes(errorAttributes.name)) ? NucleusError[errorAttributes.name] : NucleusError;
+
+        if (reject) reject(new NucleusErrorType(errorAttributes.message, {error: errorAttributes}));
+
+        return Promise.reject({ actionStatus, error: new NucleusErrorType(errorAttributes.message, {error: errorAttributes}) });
+      } else (reject || Promise.reject)({ actionStatus });
     }
 
-    return Promise.resolve($$actionResponsePromise);
+    return { actionStatus };
   }
 
   /**

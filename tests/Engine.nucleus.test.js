@@ -201,6 +201,12 @@ mocha.suite('Nucleus Engine', function () {
         methodName: 'executeSimpleDummyWithOptions'
       });
 
+      await $dummyEngine.storeActionConfiguration({
+        actionName: 'ExecuteSimpleDummyWithRandomExecutionTime',
+        contextName: 'Self',
+        methodName: 'executeSimpleDummyWithRandomExecutionTime'
+      });
+
     });
 
     mocha.suiteTeardown(async function () {
@@ -429,7 +435,7 @@ mocha.suite('Nucleus Engine', function () {
 
     });
 
-    mocha.suite("Load testing", function () {
+    mocha.suite.only("Load testing", function () {
       // NOTE: Test aren't satisfactory. There is a clear degradation as the number of request increase.
       // 50, 100 or more requests made under a second is an unusual load, but the process needs to be optimized.
 
@@ -446,7 +452,7 @@ mocha.suite('Nucleus Engine', function () {
           .then(console.log);
       });
 
-      mocha.suite("Action publication", function () {
+      mocha.suite.skip("Action publication", function () {
         const requestCountList = [ 25, 50, 100, 500 ];
 
         requestCountList
@@ -468,7 +474,7 @@ mocha.suite('Nucleus Engine', function () {
 
       });
 
-      mocha.suite("Full request loop", function () {
+      mocha.suite.only("Full request loop", function () {
         const requestCountList = [ 1, 25, 50, 100, 500 ];
 
         // Before debounce
@@ -498,10 +504,41 @@ mocha.suite('Nucleus Engine', function () {
               const { $engine } = this;
 
               return Promise.all(Array.apply(null, { length: requestCount })
-                .map(() => {
+                .map(async () => {
                   const userID = uuid.v4();
 
-                  return $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', {}, userID);
+                  const { AID } = await $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', {}, userID);
+
+                  chai.expect(AID).to.be.a('string');
+                }));
+            });
+
+          });
+
+      });
+
+      mocha.suite.only("Full request loop with random execution time", function () {
+        const requestCountList = [ 1, 25, 50, 100, 500, 1000 ];
+
+        mocha.suiteSetup(function () {
+          const { $dummyEngine } = this;
+
+          return $dummyEngine.subscribeToActionQueueUpdate('Dummy');
+        });
+
+        requestCountList
+          .forEach((requestCount) => {
+
+            mocha.test(`${requestCount} requests...`, function () {
+              const { $engine } = this;
+
+              return Promise.all(Array.apply(null, { length: requestCount })
+                .map(async () => {
+                  const userID = uuid.v4();
+
+                  const { AID } = await $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummyWithRandomExecutionTime', {}, userID);
+
+                  chai.expect(AID).to.be.a('string');
                 }));
             });
 
