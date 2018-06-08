@@ -60,7 +60,7 @@ class NucleusResourceRelationshipDatastore {
    *
    * @returns {Promise}
    */
-  removeRelationship (subject, predicate, object) {
+  removeRelationshipBetweenSubjectAndObject (subject, predicate, object) {
     if (nucleusValidator.isObject(subject) || nucleusValidator.isObject(object)) {
       const stringifiedSubjectNode = (nucleusValidator.isObject(subject)) ? `${subject.type}-${subject.ID}` : subject;
       const stringifiedObjectNode = (nucleusValidator.isObject(object)) ? `${object.type}-${object.ID}` : object;

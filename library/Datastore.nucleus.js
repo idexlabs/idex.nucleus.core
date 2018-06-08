@@ -385,7 +385,7 @@ class NucleusDatastore {
     if (!nucleusValidator.isString(predicate)) throw new NucleusError.UnexpectedValueTypeNucleusError("The predicate must be a string.");
     if (!nucleusValidator.isString(object)) throw new NucleusError.UnexpectedValueTypeNucleusError("The object must be a string.");
 
-    return this.multi()
+    return this.$$server.multi()
       .zrem(itemKey, `SPO:${subject}:${predicate}:${object}`)
       .zrem(itemKey, `SOP:${subject}:${object}:${predicate}`)
       .zrem(itemKey, `OPS:${object}:${predicate}:${subject}`)

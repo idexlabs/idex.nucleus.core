@@ -812,7 +812,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite("#updatesResourceByID", function () {
+    mocha.suite("#updateResourceByID", function () {
 
       mocha.test("The dummy resource is updated to the datastore.", async function () {
         const { $datastore, $resourceRelationshipDatastore, $$sandbox } = this;
@@ -831,7 +831,7 @@ mocha.suite("Nucleus Resource API", function () {
           name: `Dummy ${uuid.v4()}`
         };
 
-        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
+        return NucleusResourceAPI.updateResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
           .then(({ resource }) => {
             chai.expect(resource).to.deep.include({
               ID: resourceID,
@@ -871,7 +871,7 @@ mocha.suite("Nucleus Resource API", function () {
           name: `Dummy ${uuid.v4()}`
         };
 
-        return NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
+        return NucleusResourceAPI.updateResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID)
           .then(({ resource, resourceRelationships }) => {
             chai.expect(resourceRelationships).to.be.an('object');
           });
@@ -890,7 +890,7 @@ mocha.suite("Nucleus Resource API", function () {
 
         const originUserID = '1c76c8d1-8cdc-4c40-8132-36f657b5bf69';
 
-        chai.expect(NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, { name: `Dummy ${uuid.v4()}` }, originUserID))
+        chai.expect(NucleusResourceAPI.updateResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, { name: `Dummy ${uuid.v4()}` }, originUserID))
           .to.be.rejectedWith(NucleusError.UnauthorizedActionNucleusError);
       });
 
@@ -912,29 +912,29 @@ mocha.suite("Nucleus Resource API", function () {
             name: `Dummy ${uuid.v4()}`
           };
 
-          return Promise.resolve(NucleusResourceAPI.updatesResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID))
+          return Promise.resolve(NucleusResourceAPI.updateResourceByID.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, dummyAttributesToUpdate, authorUserID))
             .delay(2000)
             .then(NucleusResourceAPI.retrieveResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, authorUserID))
             .delay(2000)
-            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+            .then(NucleusResourceAPI.updateResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
               name: `Dummy ${uuid.v4()}`
             }, authorUserID))
             .delay(2000)
             .then(NucleusResourceAPI.retrieveAllResourcesByType.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, authorUserID, 'TopNodeDescent'))
             .delay(2000)
-            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+            .then(NucleusResourceAPI.updateResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
               name: `Dummy ${uuid.v4()}`
             }, authorUserID))
             .delay(2000)
             .then(NucleusResourceAPI.retrieveResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, authorUserID))
             .delay(2000)
-            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+            .then(NucleusResourceAPI.updateResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
               name: `Dummy ${uuid.v4()}`
             }, authorUserID))
             .delay(2000)
             .then(NucleusResourceAPI.retrieveAllResourcesByType.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, authorUserID, 'TopNodeDescent'))
             .delay(2000)
-            .then(NucleusResourceAPI.updatesResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
+            .then(NucleusResourceAPI.updateResourceByID.bind({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, resourceID, {
               name: `Dummy ${uuid.v4()}`
             }, authorUserID));
         });

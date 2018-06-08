@@ -20,6 +20,64 @@ const HIERARCHY_TREE_CACHE_TTL = 10;
 class NucleusResourceAPI {
 
   /**
+   * Assigns one or many relationships to a resource given its ID.
+   *
+   * @Nucleus ActionName AssignRelationshipsToResourceByID
+   * @Nucleus ExtendableActionName `AssignRelationshipsTo${resourceType}ByID`
+   * @Nucleus ExtendableEventName `RelationshipsTo${resourceType}ByIDAssigned`
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}`
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   * @argument {Object[]} resourceRelationshipList
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<{ resourceID: String, resourceType: String, resourceRelationships: Object }>}
+   *
+   * @throws Will throw an error if the resource type is not a string.
+   * @throws Will throw an error if the resource ID is not a string.
+   * @throws Will throw an error if the origin user ID is not a string.
+   */
+  static async assignRelationshipsToResourceByID (resourceType, resourceID, resourceRelationshipList, originUserID) {
+    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
+    if (!nucleusValidator.isString(resourceID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID must be a string and can't be undefined.");
+    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
+
+    const resourceExists = !!(await $datastore.$$server.existsAsync(resourceItemKey));
+
+    if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
+
+    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
+
+    if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
+
+    const resourceRelationships = {};
+
+    return Promise.all(resourceRelationshipList.map(({ predicate, resourceID: objectResourceID, resourceType: objectResourceType }) => {
+      if (!(predicate in resourceRelationships))
+        resourceRelationships[predicate] = [];
+
+      resourceRelationships[predicate].push({
+        relationship: predicate,
+        resourceID: objectResourceID,
+        resourceType: objectResourceType
+      });
+
+      return $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(
+        `${resourceType}-${resourceID}`,
+        predicate,
+        `${objectResourceType}-${objectResourceID}`
+      );
+    }))
+      .return({ resourceID, resourceType, resourceRelationships });
+  }
+
+  /**
    * Creates a resource given its name and an object of its attributes.
    *
    * @Nucleus ActionName CreateResource
@@ -505,6 +563,54 @@ class NucleusResourceAPI {
   }
 
   /**
+   * Assigns one or many relationships to a resource given its ID.
+   *
+   * @Nucleus ActionName UnassignRelationshipsToResourceByID
+   * @Nucleus ExtendableActionName `UnassignRelationshipsTo${resourceType}ByID`
+   * @Nucleus ExtendableEventName `RelationshipsTo${resourceType}ByIDUnassigned`
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}ID` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}`
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   * @argument {Object[]} resourceRelationshipList
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<{ resourceID: String, resourceType: String, resourceRelationships: Object }>}
+   *
+   * @throws Will throw an error if the resource type is not a string.
+   * @throws Will throw an error if the resource ID is not a string.
+   * @throws Will throw an error if the origin user ID is not a string.
+   */
+  static async unassignRelationshipsToResourceByID (resourceType, resourceID, resourceRelationshipList, originUserID) {
+    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
+    if (!nucleusValidator.isString(resourceID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID must be a string and can't be undefined.");
+    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
+
+    const resourceExists = !!(await $datastore.$$server.existsAsync(resourceItemKey));
+
+    if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
+
+    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
+
+    if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
+
+    return Promise.all(resourceRelationshipList.map(({ relationship: predicate, resourceID: objectResourceID, resourceType: objectResourceType }) => {
+
+      return $resourceRelationshipDatastore.removeRelationshipBetweenSubjectAndObject(
+        `${resourceType}-${resourceID}`,
+        predicate,
+        `${objectResourceType}-${objectResourceID}`
+      );
+    }))
+      .return({ resourceID, resourceType });
+  }
+
+  /**
    * Updates a resource given its ID.
    *
    * @Nucleus ActionName UpdateResourceByID
@@ -531,7 +637,7 @@ class NucleusResourceAPI {
    * @throws Will throw an error if the origin user is not authorized to retrieve the resource.
    * @throws Will throw an error if the resource does not exist.
    */
-  static async updatesResourceByID (resourceType, NucleusResourceModel, resourceID, resourceAttributes, originUserID) {
+  static async updateResourceByID (resourceType, NucleusResourceModel, resourceID, resourceAttributes, originUserID) {
     if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
     if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
     if (!nucleusValidator.isString(resourceID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID must be a string.");
