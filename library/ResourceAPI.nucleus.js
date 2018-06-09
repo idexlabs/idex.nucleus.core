@@ -342,7 +342,7 @@ class NucleusResourceAPI {
       });
 
     const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
-      .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+      .then(itemFields => itemFields.filter(Boolean).map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
 
     const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(resourceIDList
       .map((resourceID) => {

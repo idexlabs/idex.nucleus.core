@@ -40,7 +40,7 @@ class NucleusError extends Error {
 
     const [ nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber ] = (!!error && 'nucleusErrorType' in error) ?
       [ error.nucleusErrorType, error.stackName, error.stackFileName, error.stackLineNumber, error.stackColumnNumber ] :
-      ((error || this).stack.match($$stackOriginMetaRegularExpression) || []).splice(1);
+      (((error || this).stack || '').match($$stackOriginMetaRegularExpression) || []).splice(1);
 
     Object.assign(this, { nucleusErrorType, stackName, stackFileName, stackLineNumber, stackColumnNumber });
 
