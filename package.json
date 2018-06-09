@@ -22,7 +22,6 @@
     "redis": "^2.8.0",
     "superstruct": "^0.5.2",
     "uuid": "^3.2.1",
-    "v8-profiler": "^5.7.0",
     "validator": "^9.4.1"
   },
   "devDependencies": {
@@ -32,6 +31,7 @@
     "express": "^4.16.3",
     "mocha": "latest",
     "sinon": "latest",
-    "socket.io-client": "latest"
+    "socket.io-client": "latest",
+    "v8-profiler": "^5.7.0"
   }
 }
