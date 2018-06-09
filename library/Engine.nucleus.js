@@ -300,7 +300,7 @@ class NucleusEngine {
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
-      this.$logger.debug(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
+      this.$logger.info(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
 
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
       await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
@@ -573,6 +573,7 @@ end
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
 
     const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName);
+    if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError(`Could not executed the action "${actionName}" because it wasn't registered properly.`);
 
     const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
@@ -941,14 +942,14 @@ end
     const redisConnectionVerified = !!(await this.$actionDatastore.evaluateLUAScript(`
     local engineID = ARGV[1]
     local verificationTTL = ARGV[2]
-          
+
     local redisConnectionVerified = redis.call('GET', 'RedisConnectionVerified')
     if (not redisConnectionVerified) then
       redis.call('SETEX', 'RedisConnectionVerified', verificationTTL, engineID)
-     
+
        return 0
     end
- 
+
    return 1
     `, this.ID, 60 * 60 * 7));
 
@@ -1025,7 +1026,7 @@ end
     try {
       const evaluatedString = new Function('Nucleus', 'context', `
       const { ${propertyList.join(', ')} } = context;
-    
+
       return ${string};
     `)(Nucleus, context);
 

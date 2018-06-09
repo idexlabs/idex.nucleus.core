@@ -45,8 +45,8 @@ class NucleusResourceRelationshipDatastore {
    * @returns {Promise<void>}
    */
   createRelationshipBetweenSubjectAndObject (subject, predicate, object) {
-    if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${subject}"`);
-    if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${object}"`);
+    if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${subject}"`);
+    if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${object}"`);
 
     return this.$datastore.addTripleToHexastore('ResourceRelationship', subject, predicate, object);
   }
