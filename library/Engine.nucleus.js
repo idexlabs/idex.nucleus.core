@@ -604,19 +604,21 @@ end
     });
 
     return Promise.resolve($$actionResponsePromise);
-      // .timeout(actionHangupTimeout, "Action listener timed-out.")
-      // .catch(async (error) => {
-      //   const { name } = error;
-      //
-      //   if (!name && name !== 'TimeoutError') return Promise.reject(error);
-      //
-      //   const [ actionID, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName($action.generateOwnItemKey(), 'ID', 'status');
-      //
-      //   console.log("=== Timeout", actionID, actionStatus);
-      //   return this.handleActionStatusUpdated($action.generateOwnItemKey(), $action.ID, $action.name);
-      // });
   }
 
+  /**
+   * Handles an action channel's Redis events.
+   * This is used to trigger a check of the action's status in the attempt of resolving a publisher's request.
+   * _This method is tightly coupled with the #publishActionByNameAndHandleResponse and should be refactored._
+   *
+   * @argument {NucleusDatastore} $actionSubscriberDatastore
+   * @argument {Promise.resolve} resolve - The resolver to call when the action is completed.
+   * @argument {Promise.reject} reject - The rejecter to call when the action is failed.
+   * @argument {String} channelName
+   * @argument {String} redisCommand
+   *
+   * @returns {Promise<void>}
+   */
   async handleActionChannelRedisEvent ($actionSubscriberDatastore, resolve, reject, channelName, redisCommand) {
     if (redisCommand !== 'hset' && redisCommand !== 'hmset') return;
 
@@ -636,6 +638,18 @@ end
     }
   }
 
+  /**
+   * Handles an action's status update.
+   * _This method is tightly coupled with the #publishActionByNameAndHandleResponse and should be refactored._
+   *
+   * @argument {String} actionItemKey
+   * @argument {String} actionID
+   * @argument {String} actionName
+   * @argument {Promise.resolve} [resolve]
+   * @argument {Promise.reject} [reject]
+   *
+   * @returns {Promise}
+   */
   async handleActionStatusUpdated (actionItemKey, actionID, actionName, resolve, reject) {
     const [ actionFinalMessage, actionStatus ] = await this.$actionDatastore.retrieveItemFromHashFieldByName(actionItemKey, 'finalMessage', 'status');
 
