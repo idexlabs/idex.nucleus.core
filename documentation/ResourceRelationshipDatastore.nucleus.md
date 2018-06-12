@@ -26,7 +26,7 @@ Creates a relationship between the subject and the object.
 
 **object**: `String`, Creates a relationship between the subject and the object.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusResourceRelationshipDatastore.removeAllRelationshipsToVector(vector) 
 
@@ -36,7 +36,7 @@ Removes all relationship to the vector.
 
 **vector**: `String`, Removes all relationship to the vector.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusResourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(subject, predicate) 
 
@@ -48,7 +48,7 @@ Retrieves the object of a subject's relationship.
 
 **predicate**: `String`, Retrieves the object of a subject's relationship.
 
-**Returns**: `Promise.<Array>;`
+**Returns**: `Promise.&lt;Array&gt;`
 
 ### NucleusResourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(object, predicate) 
 
@@ -60,7 +60,7 @@ Retrieves the subject of an object's relationship.
 
 **predicate**: `String`, Retrieves the subject of an object's relationship.
 
-**Returns**: `Promise.<Array>;`
+**Returns**: `Promise.&lt;Array&gt;`
 
 
 

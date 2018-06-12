@@ -28,7 +28,7 @@ Adds an item to a hash given a field and its key. `HMSET key field value`
 
 **hashList**: `Array`, Adds an item to a hash given a field and its key. `HMSET key field value`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.addItemToListByName(itemKey, item, itemList) 
 
@@ -42,7 +42,7 @@ Adds an item to a list given its key. `LPUSH key value`
 
 **itemList**: `Array`, Adds an item to a list given its key. `LPUSH key value`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.addItemToSetByName(itemKey, item) 
 
@@ -54,7 +54,7 @@ Adds an item to a set. `SADD key value`
 
 **item**: `String`, Adds an item to a set. `SADD key value`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.addTripleToHexastore(itemKey, subject, predicate, object) 
 
@@ -70,7 +70,7 @@ Adds a triple to a hexastore.
 
 **object**: `String`, Adds a triple to a hexastore.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusDatastore.createItem(itemKey, item) 
 
@@ -82,7 +82,7 @@ Creates an item. `SET key value`
 
 **item**: `*`, Creates an item. `SET key value`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.destroy() 
 
@@ -110,7 +110,7 @@ Evaluates a LUA script.
 
 **argumentList**: `Array`, Evaluates a LUA script.
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.executeHandlerCallbackForChannelName(channelName, $event) 
 
@@ -134,7 +134,7 @@ Verifies if an item is part of a given item set.
 
 **item**: `String`, Verifies if an item is part of a given item set.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 ### NucleusDatastore.handleEventByChannelName(channelName, handlerCallback) 
 
@@ -146,7 +146,7 @@ Handles event published to a specific channel given a handler callback.
 
 **handlerCallback**: `function`, Handles event published to a specific channel given a handler callback.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 ### NucleusDatastore.handleRedisEvent(argumentList) 
 
@@ -154,7 +154,7 @@ Handles Redis event.
 
 **Parameters**
 
-**argumentList**: `Array.<String>;`, Handles Redis event.
+**argumentList**: `Array.&lt;String&gt;`, Handles Redis event.
 
 
 ### NucleusDatastore.removeAllTriplesFromHexastoreByVector(itemKey, vector) 
@@ -170,7 +170,7 @@ This will remove every relationship where the given vector is subject or object.
 **vector**: `String`, Removes a triple from a hexastore given the subject vector.
 This will remove every relationship where the given vector is subject or object.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusDatastore.removeItemByName(itemKey) 
 
@@ -180,7 +180,7 @@ Removes an item given its key. `DEL key`
 
 **itemKey**: `String`, Removes an item given its key. `DEL key`
 
-**Returns**: `Promise.<null>;`
+**Returns**: `Promise.&lt;null&gt;`
 
 ### NucleusDatastore.removeItemFromFieldByName(itemKey, itemField) 
 
@@ -192,7 +192,7 @@ Removes an item from a hash given a field. `HMDEL key field`
 
 **itemField**: `String`, Removes an item from a hash given a field. `HMDEL key field`
 
-**Returns**: `Promise.<null>;`
+**Returns**: `Promise.&lt;null&gt;`
 
 ### NucleusDatastore.retrieveAllItemsFromHashByName(itemKey) 
 
@@ -202,7 +202,7 @@ Retrieves all the items from a hash given its name. `HGETALL key`
 
 **itemKey**: , Retrieves all the items from a hash given its name. `HGETALL key`
 
-**Returns**: `Promise.<Array>;`
+**Returns**: `Promise.&lt;Array&gt;`
 
 ### NucleusDatastore.retrieveItemByName(itemKey) 
 
@@ -212,7 +212,7 @@ Retrieves an item given its key. `GET key`
 
 **itemKey**: `String`, Retrieves an item given its key. `GET key`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.retrieveItemFromHashFieldByName(itemKey, itemField, itemFieldList) 
 
@@ -224,9 +224,9 @@ Remove an item from a hash given an item field. `HMDEL key field`
 
 **itemField**: `String`, Remove an item from a hash given an item field. `HMDEL key field`
 
-**itemFieldList**: `Array.<String>;`, Remove an item from a hash given an item field. `HMDEL key field`
+**itemFieldList**: `Array.&lt;String&gt;`, Remove an item from a hash given an item field. `HMDEL key field`
 
-**Returns**: `Promise.<*>;`
+**Returns**: `Promise.&lt;*&gt;`
 
 ### NucleusDatastore.retrieveItemFromListDeferred(itemKey) 
 
@@ -250,7 +250,7 @@ Retrieves the relationship between a subject and an object from a hexastore.
 
 **object**: `String`, Retrieves the relationship between a subject and an object from a hexastore.
 
-**Returns**: `Promise.<Array.<String>;>;`
+**Returns**: `Promise.&lt;Array.&lt;String&gt;&gt;`
 
 ### NucleusDatastore.retrieveVectorByIndexSchemeFromHexastore(itemName, indexingScheme, vectorA, vectorB) 
 
@@ -266,7 +266,7 @@ Retrieves the any vector from any triple given the index scheme from a hexastore
 
 **vectorB**: `String`, Retrieves the any vector from any triple given the index scheme from a hexastore.
 
-**Returns**: `Promise.<Array.<String>;>;`
+**Returns**: `Promise.&lt;Array.&lt;String&gt;&gt;`
 
 **Example**:
 ```js

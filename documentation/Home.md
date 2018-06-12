@@ -1,95 +1,41 @@
 # Nucleus
 
-Nucleus is flexible library to implement a distributed micro-service(-like) architecture in NodeJS.  
+Nucleus is a flexible library that offers tools to implement a distributed micro-service(-like) architecture in NodeJS.  
 
-## High level Nucleus architecture
+## Getting started
 
-Nucleus implements a two way communication layer based on Redis. Each service are called "Engine" which can communicate
-between each other via two different protocols:
+### Redis
 
-### Action
-An action is similar to an HTTP request: you make a request, you get a response.
+The communication of Nucleus is heavily based on Redis, first and for all make sure to install Redis. [Redis installation guide](https://redis.io/topics/quickstart)
 
-```javascript
-const { NucleusEngine } = require('Nucleus');
+For Nucleus to work correctly, you need to make sure that your server can use keyspace notification. `CONFIG SAVE notify-keyspace-events AKE`  
+You can copy the `redis.conf` file from Nucleus root directory into your project.
 
-// Create an Engine that registers the Ping action.
-class DummyEngine extends NucleusEngine {
-  
-  // Register the `ping` method as the "Ping" action handler using the `@Nucleus ActionName` tag.
-  /**
-  * Pings
-  * 
-  * @Nucleus ActionName Ping
-  * 
-  * @returns {Promise<Object>}
-  */
-  ping () {
-    // Every action is expected to return a Promise that resolves to an object.
-    
-    return Promise.resolve({ ping: "Ping" });
-  }
-  
-}
-
-// ---
-
-// Instantiate the engines that was created.
-const $dummyEngine = new DummyEngine();
-const $testEngine = new NucleusEngine();
-
-// Wait for both engine to be initialized and ready to use.
-Promise.all([ $dummyEngine, $testEngine ])
-  .then(async () => {
-    // Use the Test engine to publish an action named "Ping".
-    // Behind the scene, the Dummy engine will respond to the request by executing the $dummyEngine.ping function.
-    const { ping } = await $testEngine.publishActionByNameAndHandleResponse('Ping', {});
-    
-    console.log(ping);
-    // $ Ping
-  });
+```bash
+$ redis-server PATH_TO_PROJECT/redis.conf
 ```
 
-### Event
-An event as a similar implementation than a NodeJS EventEmitter event, you can publish/subscribe to an event.
+## Nucleus Engine
+
+The Nucleus engine (engine for short) is used to interact with the communication layer. It is task to publish/handle actions
+and events.
+
+### Create a new Engine
+
+You can create an engine by simply instantiating the `NucleusEngine` class:
 
 ```javascript
-const { NucleusEngine, NucleusEvent } = require('Nucleus');
+const { NucleusEngine } = require('idex.nucleus');
 
-// Instantiate the engines that were created.
-const $pingEngine = new NucleusEngine();
-const $pongEngine = new NucleusEngine();
-const $testEngine = new NucleusEngine();
+const $engine = new NucleusEngine('Test');
 
-// Create an event handler for the "Ping" channel.
-$pingEngine.handleEventByChannelName('Ping', () => {
-  console.log('PING');
+// Here, `$engine` is a proxy: it is both a valid promise and the instantiated Nucleus engine.
 
-  const $event = new NucleusEvent('Pong', {});
-
-  // Publish an event to the "Pong" channel.
-  process.nextTick($pingEngine.publishEventToChannelByName.bind($pingEngine, 'Pong', $event));
-});
-
-// Create an event handler for the "Pong" channel.
-$pongEngine.handleEventByChannelName('Pong', () => {
-  console.log('PONG');
-
-  const $event = new NucleusEvent('Ping', {});
-
-  // Publish an event to the "Ping" channel.
-  process.nextTick($pongEngine.publishEventToChannelByName.bind($pongEngine, 'Ping', $event));
-});
-
-// Subscribe the Ping engine to the "Ping" channel.
-$pingEngine.subscribeToChannelName('Ping');
-
-// Subscribe the Pong engine to the "Pong" channel.
-$pongEngine.subscribeToChannelName('Pong');
-
-const $event = new NucleusEvent('Ping', {});
-
-$testEngine.publishEventToChannelByName('Ping', $event);
-
-// An infinite loop of "Ping" and "Pong" will be printed.
+$engine
+      // The engine is ready to be used.
+    .then(() => {
+      // Do something with the engine.
+    })
+    // Something happened during the initialization of the engine.
+    .catch(console.error);
 ```

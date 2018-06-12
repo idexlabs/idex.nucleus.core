@@ -22,7 +22,7 @@ the engine is ready. If no datastore is passed in the option, a default connecti
 
 Autodiscovers the module's actions.
 
-**Returns**: `Promise.<{actionConfigurationList: Array.<actionConfiguration>;, extendableActionConfigurationList: Array.<extendableActionConfiguration>;, resourceStructureList: Array.<resourceStructure>;}>;`
+**Returns**: `Promise.&lt;{actionConfigurationList: Array.&lt;actionConfiguration&gt;, extendableActionConfigurationList: Array.&lt;extendableActionConfiguration&gt;, resourceStructureList: Array.&lt;resourceStructure&gt;}&gt;`
 
 ### NucleusEngine.destroy() 
 
@@ -38,7 +38,7 @@ Executes a pending action.
 
 **$action**: `NucleusAction`, Executes a pending action.
 
-**Returns**: `Promise.<NucleusAction>;`
+**Returns**: `Promise.&lt;NucleusAction&gt;`
 
 ### NucleusEngine.executeMethodInContext($action, actionSignature, contextName, filePath, methodName) 
 
@@ -48,7 +48,7 @@ Executes the action given its context.
 
 **$action**: `NucleusAction`, Executes the action given its context.
 
-**actionSignature**: `Array.<String>;`, Executes the action given its context.
+**actionSignature**: `Array.&lt;String&gt;`, Executes the action given its context.
 
 **contextName**: `String`, Executes the action given its context.
 
@@ -56,7 +56,7 @@ Executes the action given its context.
 
 **methodName**: `String`, Executes the action given its context.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 ### NucleusEngine.fulfilActionSignature($action, actionSignatureList, argumentConfigurationByArgumentName) 
 
@@ -66,11 +66,11 @@ Fulfils an action signature given different options and the argument configurati
 
 **$action**: `NucleusAction`, Fulfils an action signature given different options and the argument configuration.
 
-**actionSignatureList**: `Array.<Array>;`, Fulfils an action signature given different options and the argument configuration.
+**actionSignatureList**: `Array.&lt;Array&gt;`, Fulfils an action signature given different options and the argument configuration.
 
 **argumentConfigurationByArgumentName**: `Object`, Fulfils an action signature given different options and the argument configuration.
 
-**Returns**: `Array.<String>;`
+**Returns**: `Array.&lt;String&gt;`
 
 ### NucleusEngine.generateResourceModelFromResourceStructureByResourceType(resourceType) 
 
@@ -80,7 +80,7 @@ Generates a Resource Model from a resource structure given the resource type.
 
 **resourceType**: `String`, Generates a Resource Model from a resource structure given the resource type.
 
-**Returns**: `Promise.<function()>;`
+**Returns**: `Promise.&lt;function()&gt;`
 
 ### NucleusEngine.publishActionToQueueByName(actionQueueName, $action) 
 
@@ -92,7 +92,7 @@ Publishes an action given a queue name.
 
 **$action**: `NucleusAction`, Publishes an action given a queue name.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 **Example**:
 ```js
@@ -114,7 +114,7 @@ Publishes an action given its name and a message, then handle the response.
 
 **originUserID**: `String`, Publishes an action given its name and a message, then handle the response.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 **Example**:
 ```js
@@ -131,7 +131,7 @@ Publishes an event given a channel name.
 
 **$event**: `NucleusEvent`, Publishes an event given a channel name.
 
-**Returns**: `Promise.<Object>;`
+**Returns**: `Promise.&lt;Object&gt;`
 
 **Example**:
 ```js
@@ -149,7 +149,7 @@ Retrieves the action configurations given an action name.
 
 **actionName**: `String`, Retrieves the action configurations given an action name.
 
-**Returns**: `Promise.<actionConfiguration>;`
+**Returns**: `Promise.&lt;actionConfiguration&gt;`
 
 ### NucleusEngine.retrieveExtendableActionConfigurationByActionName(actionName) 
 
@@ -159,7 +159,7 @@ Retrieves the extendable action configurations given an action name.
 
 **actionName**: `String`, Retrieves the extendable action configurations given an action name.
 
-**Returns**: `Promise.<extendableActionConfiguration>;`
+**Returns**: `Promise.&lt;extendableActionConfiguration&gt;`
 
 ### NucleusEngine.retrievePendingAction(actionQueueName) 
 
@@ -169,7 +169,7 @@ Retrieves a pending action name and call the execution.
 
 **actionQueueName**: `String`, Retrieves a pending action name and call the execution.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusEngine.retrieveResourceStructureByResourceType(resourceType) 
 
@@ -179,7 +179,7 @@ Retrieves the resource structure given a resource type.
 
 **resourceType**: `String`, Retrieves the resource structure given a resource type.
 
-**Returns**: `Promise.<resourceStructure>;`
+**Returns**: `Promise.&lt;resourceStructure&gt;`
 
 ### NucleusEngine.storeActionConfiguration(defaultActionQueueName, actionConfiguration) 
 
@@ -221,7 +221,7 @@ Subscribe to the action queue updates given its name.
 
 **actionQueueName**: `String`, Subscribe to the action queue updates given its name.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusEngine.subscribeToEventChannelByName(channelName) 
 
@@ -231,7 +231,7 @@ Subscribes to a channel given its name.
 
 **channelName**: `String`, Subscribes to a channel given its name.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusEngine.unsubscribeFromEventChannelByName(channelName) 
 
@@ -241,13 +241,13 @@ Unsubscribes to a channel given its name.
 
 **channelName**: `String`, Unsubscribes to a channel given its name.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusEngine.verifyRedisConfiguration() 
 
 Verifies that the Redises connection are configured correctly.
 
-**Returns**: `Promise.<void>;`
+**Returns**: `Promise.&lt;void&gt;`
 
 ### NucleusEngine.parseTemplateString(context, string) 
 
@@ -305,7 +305,7 @@ Retrieves all doclets in path.
 
 **path**: `String`, Retrieves all doclets in path.
 
-**Returns**: `Promise.<Array.<doclet>;>;`
+**Returns**: `Promise.&lt;Array.&lt;doclet&gt;&gt;`
 
 
 

@@ -1,0 +1,24 @@
+.DS_Store
+.data/
+.docs/
+.dump/
+.idea/
+.sass-cache/
+coverage/
+journal/
+node_modules/
+Library/
+nucleus
+
+*.db
+*.iml
+*.log
+*.rdb
+*.zip
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+.todo.md
