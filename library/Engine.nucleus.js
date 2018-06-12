@@ -951,52 +951,45 @@ end
    * @returns {Promise<void>}
    */
   async verifyRedisConfiguration () {
-    // Make sure that the Action datastore is configured correctly.
-    // The process will exit if the Keyspace notification configuration is not properly set.
-    const redisConnectionVerified = !!(await this.$actionDatastore.evaluateLUAScript(`
-    local engineID = ARGV[1]
-    local verificationTTL = ARGV[2]
-
-    local redisConnectionVerified = redis.call('GET', 'RedisConnectionVerified')
-    if (not redisConnectionVerified) then
-      redis.call('SETEX', 'RedisConnectionVerified', verificationTTL, engineID)
-
-       return 0
-    end
-
-   return 1
-    `, this.ID, 60 * 60 * 7));
+    const redisConnectionVerified = await this.$actionDatastore.$$server.existsAsync('RedisConnectionVerified');
 
     if (redisConnectionVerified) return;
 
     this.$logger.debug(`Verifying the ${this.name} engine's action datastore connection.`);
 
-    const keyspaceNotificationActivated = (await this.$actionDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'notify-keyspace-events');`))[1];
+    try {
+      const keyspaceNotificationActivated = (await this.$actionDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'notify-keyspace-events');`))[1];
 
-    if (keyspaceNotificationActivated !== 'AKE') {
-      this.$logger.error(`Redis' Keyspace Notification is not activated, please make sure to configure your Redis server correctly.
+      if (keyspaceNotificationActivated !== 'AKE') {
+        this.$logger.error(`Redis' Keyspace Notification is not activated, please make sure to configure your Redis server correctly.
   # redis.conf
   # Check http://download.redis.io/redis-stable/redis.conf for more details.
   notify-keyspace-events AKE
   `);
-      process.exit(699);
-    }
+        process.exit(699);
+      }
 
-    this.$logger.debug(`The ${this.name} engine's action datastore connection has been verified, all is good.`);
+      this.$logger.debug(`The ${this.name} engine's action datastore connection has been verified, all is good.`);
 
-    // Make sure that the Engine datastore is configured correctly;
-    // To avoid any surprise, there should be a save policy.
-    const savePolicyActivated = (await this.$engineDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'save');`))[1];
+      // Make sure that the Engine datastore is configured correctly;
+      // To avoid any surprise, there should be a save policy.
+      const savePolicyActivated = (await this.$engineDatastore.evaluateLUAScript(`return redis.call('CONFIG', 'GET', 'save');`))[1];
 
-    if (nucleusValidator.isEmpty(savePolicyActivated)) {
-      this.$logger.warn(`Redis' Save policy is not activated; because Redis is used a as main store in certain cases, please make sure to configure your Redis server correctly.
+      if (nucleusValidator.isEmpty(savePolicyActivated)) {
+        this.$logger.warn(`Redis' Save policy is not activated; because Redis is used a as main store in certain cases, please make sure to configure your Redis server correctly.
   # redis.conf
   # Check http://download.redis.io/redis-stable/redis.conf for more details.
   save 900 1
   save 300 10
   save 60 10000
   `);
+      }
+    } catch (error) {
+      this.$logger.debug(`Could not verify the ${this.name} engine's action datastore connection because of an error: ${error.message}.
+Please make sure that everything is set-up properly. https://github.com/sebastienfilion/idex.nucleus/wiki`);
     }
+
+    return this.$datastore.createItem('RedisConnectionVerified', this.ID, 60 * 60 * 7);
   }
 
   /**
