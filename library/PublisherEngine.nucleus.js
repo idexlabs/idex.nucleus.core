@@ -2,6 +2,7 @@
 
 const uuid = require('uuid');
 
+const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusEngine = require('./Engine.nucleus');
 
 class PublisherEngine {
