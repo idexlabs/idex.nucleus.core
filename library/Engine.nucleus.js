@@ -111,7 +111,7 @@ class NucleusEngine {
     // Execute everything needed during the initialization phase of the engine.
     this.$$promise = Promise.all([ this.$actionDatastore, this.$engineDatastore, this.$eventDatastore, this.$eventSubscriberDatastore ])
       .then(this.verifyRedisConfiguration.bind(this))
-      .then(this.$datastore.createItem.bind(this.$datastore, 'EngineName', this.name))
+      .then(this.$datastore.createItem.bind(this.$datastore, 'EngineName', this.name, undefined))
       .then(() => { return this.$actionDatastore.addItemToSetByName(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, this.defaultActionQueueName); })
       // If the `automaticallyAutodiscover` flag is true, pass the engine directory path that should be set from the parent class.
       .then(() => { if (automaticallyAutodiscover) return this.autodiscover(this.engineDirectoryPath); })
@@ -433,6 +433,9 @@ class NucleusEngine {
    * @returns {Promise}
    */
   async fixDatastoreIssues() {
+    const staleActionEventList = await this.$eventDatastore.$$server.keysAsync('Action:*');
+
+    if (staleActionEventList.length === 0) return;
     // https://github.com/sebastienfilion/idex.nucleus/issues/3
     // The issue was due to action event being expired but not the channel event set used to manage event control flow.
     this.$logger.debug(`Removing old stale action channel ordered set. https://github.com/sebastienfilion/idex.nucleus/issues/3`);
