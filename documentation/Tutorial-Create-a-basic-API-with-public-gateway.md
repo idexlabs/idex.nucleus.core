@@ -123,6 +123,8 @@ function retrieveUserByID (userID) {
  */
 function updateUserByID (userID, userAttributes) {
   const { $datastore } = this;
+  
+  userAttributes.ID = userID;
 
   return $datastore.createItem(`User:${userID}`, userAttributes)
     .return({ user: userAttributes });
@@ -177,11 +179,14 @@ class APIGatewayEngine extends NucleusPublisherEngine {
   }
 
   registerRESTEndpoints () {
+    // Match the verb/path to the correct action to execute.
+    // By example, running this command will create a user.
+    // $ localhost:3000/user -X POST -d "{\"userAttributes\":{\"name\":\"John Doe\"}}"
     const routeList = [
       [ 'POST', '/user', 'CreateUser' ],
       [ 'DELETE', '/user/:userID', 'RemoveUserByID' ],
       [ 'GET', '/user/:userID', 'RetrieveUserByID' ],
-      [ 'PATCH', '/user/:userID', 'UpdateUserByID' ],
+      [ 'PATCH', '/user/:userID', 'UpdateUserByID' ]
     ];
 
     this.$$application.use(bodyParser.json());
@@ -207,6 +212,7 @@ class APIGatewayEngine extends NucleusPublisherEngine {
       .forEach(([ endpointVerb, endpointPath, actionName ]) => {
         this.$$application[endpointVerb.toLowerCase()](endpointPath, async (request, response) => {
           try {
+            // Gather all available data as the action message.
             const actionMessage = Object.assign({}, request.body, request.params, request.query);
             const actionResponse = await this.publishActionByNameAndHandleResponse(actionName, actionMessage, uuid.v4());
 
@@ -223,3 +229,60 @@ class APIGatewayEngine extends NucleusPublisherEngine {
 
 module.exports = APIGatewayEngine;
 ```
+
+At this point, all you have left to do is to initialize you engines...
+
+```javascript
+// Core/index.js
+
+"use strict";
+
+const CoreEngine = require("./Core.engine");
+
+const $coreEngine = new CoreEngine();
+
+if (require.main === module) {
+  $coreEngine.catch(console.error);
+} else module.exports = $coreEngine;
+```
+
+Assuming that Redis is [running correctly](./Home), in two different terminal, run your new engines...
+
+```bash
+$ node Core/
+> The Core engine has successfully initialized.
+```
+
+```bash
+$ node APIGateway/
+> HTTP server is listening on port 3000.
+```
+
+Now you are ready to test your new API:  
+
+**Create a user**
+```bash
+$ curl localhost:3000/user -X POST -d "{\"userAttributes\":{\"name\":\"John Doe\"}}"
+> {"user":{"ID":"dbf7ff2f-039d-4303-9753-990a24dddb2b","name":"John Doe"}}
+```
+
+**Retrieve the user**
+```bash
+$ curl localhost:3000/user/dbf7ff2f-039d-4303-9753-990a24dddb2b -X GET
+> {"user":{"ID":"dbf7ff2f-039d-4303-9753-990a24dddb2b","name":"John Doe"}}
+```
+
+**Update the user**
+```bash
+$ curl localhost:3000/user/dbf7ff2f-039d-4303-9753-990a24dddb2b -X PATCH "{\"userAttributes\":{\"name\":\"Jane Doe\"}}"
+> {"user":{"ID":"dbf7ff2f-039d-4303-9753-990a24dddb2b","name":"Jane Doe"}}
+```
+
+**Delete the user**
+```bash
+$ curl localhost:3000/user/dbf7ff2f-039d-4303-9753-990a24dddb2b -X DELETE
+> {"userID":"dbf7ff2f-039d-4303-9753-990a24dddb2b"}
+```
+
+But yeah, that would become a bit repetitive as you add more resources... Nucleus comes bundled with tools to help with
+[common persistent storage API](./Tutorial-Create-a-persistent-storage-API) requirements.

@@ -89,3 +89,4 @@ You can confirm that everything went according to plan by digging in Redis a lit
     "{\"ping\":\"PING\"}"
     ```
 
+Now that's in the bag, let's try to solve a common use case and [create a persistent storage API with its Gateway](./Tutorial-Create-a-basic-API-with-public-gateway).

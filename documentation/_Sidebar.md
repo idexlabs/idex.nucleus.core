@@ -3,6 +3,7 @@
 * [Autodiscovery](./Guide-Autodiscovery)
 * [Communication layer](./Guide-Communication-layer)
 * [Action](./Guide-Action)
+* [Extendable action](./Guide-Extendable-action)
 * [Engine](./Guide-Engine)
 
 # Tutorials
