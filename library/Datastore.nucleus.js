@@ -254,7 +254,7 @@ class NucleusDatastore {
   duplicateConnection (datastoreName = `${this.name}Duplicate`) {
     const { db: index, host: URL, port } = this.$$server.options;
 
-    return new NucleusDatastore(datastoreName, { index, URL, port });
+    return new NucleusDatastore(datastoreName, { $logger: this.$logger || console, index, URL, port });
   }
 
   /**
@@ -806,6 +806,8 @@ class NucleusDatastore {
   static parseHashItem (itemList = []) {
     // The most recent version of NPM redis returns an object as expected.
     if (nucleusValidator.isObject(itemList)) return NucleusDatastore.parseItem(itemList);
+
+    if (!itemList) return {};
 
     return itemList
       .reduce((accumulator, item, index, list) => {

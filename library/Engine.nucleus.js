@@ -172,6 +172,7 @@ class NucleusEngine {
           actionSignature: doclet.meta.code.paramnames,
           argumentConfigurationByArgumentName,
           contextName: (doclet.memberof === `${this.name}Engine`) ? 'Self' : doclet.memberof,
+          description: doclet.description,
           fileName: doclet.meta.filename,
           filePath: path.join(doclet.meta.path, doclet.meta.filename),
           methodName: doclet.name
