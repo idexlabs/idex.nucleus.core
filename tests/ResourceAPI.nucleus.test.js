@@ -197,9 +197,9 @@ mocha.suite("Nucleus Resource API", function () {
       mocha.test("All of the SYSTEM node members are retrieved.", async function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
-        const ancestorNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, 'SYSTEM');
+        const childrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, 'SYSTEM');
 
-        chai.expect(ancestorNodeIDList).to.have.length(12);
+        chai.expect(childrenNodeList).to.have.length(12);
       });
 
       mocha.test("The two ancestors of the resource (0da2e0ec-02a1-4756-89f5-5bf2c2d3664a) are retrieved in order of closeness.", async function () {
@@ -235,7 +235,7 @@ mocha.suite("Nucleus Resource API", function () {
         const childrenNodeIDList = await NucleusResourceAPI.walkHierarchyTreeDownward.call({ $datastore, $resourceRelationshipDatastore }, 'Group-caef15f7-58a0-4418-96c2-de211ff2496b');
 
         chai.expect(childrenNodeIDList).to.have.length(3);
-        chai.expect(childrenNodeIDList).to.deep.equal([ { ID: '8dcb8309-7ade-4ff4-a6ba-97e5642391c0', type: 'Group' }, { ID: 'f76a418a-a4a4-41e8-8f68-99d6b1446bbd', type: 'Resource' }, { ID: '87330246-ffee-4c87-aa5a-9232bca00132', type: 'User' }]);
+        chai.expect(childrenNodeIDList).to.deep.members([ { ID: '8dcb8309-7ade-4ff4-a6ba-97e5642391c0', type: 'Group' }, { ID: 'f76a418a-a4a4-41e8-8f68-99d6b1446bbd', type: 'Resource' }, { ID: '87330246-ffee-4c87-aa5a-9232bca00132', type: 'User' }]);
       });
 
       mocha.test("The user (fcc66afe-3d80-4225-bd1f-7a34bd26f403) can retrieve the resource (61fc9214-da8a-4426-8baf-b04565e87d4c).", async function () {
@@ -943,7 +943,7 @@ mocha.suite("Nucleus Resource API", function () {
 
     });
 
-    mocha.suite.skip("Retrieve all performance", function () {
+    mocha.suite("Retrieve all performance", function () {
       const dummyCountList = [ 50, 200, 400, 800, 1600 ];
 
       // Original benchmark is 200 items retrieved in 19 seconds.
