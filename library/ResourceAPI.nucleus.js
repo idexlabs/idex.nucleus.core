@@ -510,6 +510,17 @@ class NucleusResourceAPI {
       });
   }
 
+  /**
+   * Retrieves all the resources of a certain type which is a member of a resource given its ID.
+   *
+   * @argument {String} anchorResourceType
+   * @argument {String} anchorResourceID
+   * @argument {String} resourceType
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<{resourceList: Object[] }>}
+   */
   static async retrieveAllResourcesByTypeForResourceByID (anchorResourceType, anchorResourceID, resourceType, NucleusResourceModel, originUserID) {
     const { $datastore, $resourceRelationshipDatastore } = this;
 
@@ -524,6 +535,15 @@ class NucleusResourceAPI {
     return { resourceList };
   }
 
+  /**
+   * Expands a list of node into the appropriate resource.
+   *
+   * @argument {Object[]} nodeList
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<Object[]>}
+   */
   static extendNodeList(nodeList = [], NucleusResourceModel, originUserID) {
     const { $datastore, $resourceRelationshipDatastore } = this;
 
@@ -782,41 +802,11 @@ class NucleusResourceAPI {
 
     if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
 
-    const nodeList = [];
-    const nodeIDList = [];
+    return $resourceRelationshipDatastore.retrieveAllChildrenForNode(node)
+      .tap((nodeList) => {
 
-    async function retrieveChildrenForNodeByID (node) {
-      const childrenNodeList = await $resourceRelationshipDatastore.retrieveSubjectOfRelationshipWithObject(node, 'is-member-of');
-
-      if (childrenNodeList.length === 0 || !!~childrenNodeList.indexOf('SYSTEM')) return null;
-
-      childrenNodeList
-        .forEach((node) => {
-          const { ID: nodeID, type: nodeType } = node;
-
-          if (!nodeIDList.includes(nodeID)) {
-            nodeList.push(node);
-            nodeIDList.push(`${nodeType}-${nodeID}`);
-          }
-        });
-
-      if (nodeList.length >= depth) return;
-
-      return Promise.all(childrenNodeList
-        .map(retrieveChildrenForNodeByID.bind(this)));
-    }
-
-    return new Promise(async (resolve) => {
-      await retrieveChildrenForNodeByID.call(this, node);
-
-      try {
-        await $datastore.createItem(`NodeList:HierarchyTreeDownward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
-      } catch (error) {
-        reject(error);
-      }
-
-      resolve(nodeList);
-    });
+        return $datastore.createItem(`NodeList:HierarchyTreeDownward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
+      });
   }
 
   /**
@@ -836,41 +826,11 @@ class NucleusResourceAPI {
 
     if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
 
-    const nodeList = [];
-    const nodeIDList = [];
+    return $resourceRelationshipDatastore.retrieveAllAncestorsForNode(node)
+      .tap((nodeList) => {
 
-    async function retrieveAncestorForNodeByID (nodeID) {
-      const ancestorNodeList = await $resourceRelationshipDatastore.retrieveObjectOfRelationshipWithSubject(nodeID, 'is-member-of');
-
-      if (ancestorNodeList.length === 0 || !!~ancestorNodeList.indexOf('SYSTEM')) return null;
-
-      ancestorNodeList
-        .forEach((node) => {
-          const { ID: nodeID, type: nodeType } = node;
-
-          if (!~nodeIDList.indexOf(nodeID)) {
-            nodeList.push(node);
-            nodeIDList.push(`${nodeType}-${nodeID}`);
-          }
-        }, nodeList);
-
-      if (nodeList.length >= depth) return;
-
-      return Promise.all(ancestorNodeList
-        .map(retrieveAncestorForNodeByID.bind(this)));
-    }
-
-    return new Promise(async (resolve, reject) => {
-      await retrieveAncestorForNodeByID.call(this, node);
-
-      try {
-        await $datastore.createItem(`NodeList:HierarchyTreeUpward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
-      } catch (error) {
-        reject(error);
-      }
-
-      resolve(nodeList);
-    });
+        return $datastore.createItem(`NodeList:HierarchyTreeUpward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
+      });
   }
 }
 
