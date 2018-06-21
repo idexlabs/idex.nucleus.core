@@ -1,8 +1,14 @@
 "use strict";
 
+const Promise = require('bluebird');
+const fs = require('fs');
+const path = require('path');
+
 const NucleusDatastore = require('./Datastore.nucleus');
 const NucleusError = require('./Error.nucleus');
 const nucleusValidator = require('./validator.nucleus');
+
+const fsReadFilePromisified = Promise.promisify(fs.readFile);
 
 class NucleusResourceRelationshipDatastore {
 
@@ -22,11 +28,27 @@ class NucleusResourceRelationshipDatastore {
       writable: false
     });
 
+    this.$$promise = this.$datastore.$$promise
+      .then(() => {
+
+        return Promise.all([
+          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllAncestorsForNode.lua'), 'UTF8'),
+          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8')
+        ]);
+      })
+      .then(([ retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript ]) => {
+
+        return Promise.all([
+          this.$datastore.registerScriptByName('RetrieveAllAncestorsForNode', retrieveAllAncestorsForNodeScript),
+          this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript)
+        ]);
+      });
+
     const $$proxy = new Proxy(this, {
       get: function (object, property) {
         if (property in object) return (typeof object[property] === 'function') ? object[property].bind(object) : object[property];
-        else if (property in object.$datastore.$$promise) {
-          return (typeof object.$datastore.$$promise[property] === 'function') ? object.$datastore.$$promise[property].bind(object.$datastore.$$promise) : object.$datastore.$$promise[property];
+        else if (property in object.$$promise) {
+          return (typeof object.$$promise[property] === 'function') ? object.$$promise[property].bind(object.$$promise) : object.$$promise[property];
         }
         else undefined;
       }
@@ -95,150 +117,47 @@ class NucleusResourceRelationshipDatastore {
    *
    * @returns {Promise<String[]>}
    */
-  retrieveAllAncestorsForNode (node) {
-    if (nucleusValidator.isObject(node)) {
-      const stringifiedNode = `${node.type}-${node.ID}`;
+  retrieveAllAncestorsForNode (nodeList) {
+    const nodeListIsArray = nucleusValidator.isArray(nodeList);
+    const parsedNodeList = ((nodeListIsArray) ? nodeList : [ nodeList ])
+      .map((node) => {
+        if (nucleusValidator.isObject(node)) return `${node.type}-${node.ID}`;
+        else return node;
+      });
 
-      return this.retrieveAllAncestorsForNode(stringifiedNode);
-    }
+    const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
-    return this.$datastore.evaluateLUAScript(`local itemKey = ARGV[1]
-local node = ARGV[2]
-
-local nodeList = {}
-local tripple = '[SPO:'..node..':is-member-of:SYSTEM'
-
-redis.call('ZADD', itemKey, 0, '[SPO:'..node..':is-member-of:SYSTEM')
-
-local function contains(table, element)
-    for _, value in pairs(table) do
-        if value == element then
-            return true
-        end
-    end
-    return false
-end
-
--- Splits a tripple into a table
-local function splitTripple (tripple)
-    local splittedTripple = {}
-    local index = 1
-    for vector in string.gmatch(tripple, "([^:]+)") do
-        splittedTripple[index] = vector
-        index = index + 1
-    end
-
-    return splittedTripple
-end
-
-
--- Retrieve the ancestor for a given node
-local function recursivelyRetrieveAncestorForNodeByID(vector)
-    local ancestorNodeList = redis.call('ZRANGEBYLEX', itemKey, '[SPO:'.. vector ..':is-member-of', '[SPO:'.. vector ..':is-member-of:\xff')
-
-    if (table.getn(ancestorNodeList) == 0) then return true end
-
-    redis.log(redis.LOG_DEBUG, string.format("Nucleus: Retrieved %s ancestor(s) for vector %s.", table.getn(ancestorNodeList), vector));
-
-    for index, tripple in pairs(ancestorNodeList) do
-
-        local splittedTripple = splitTripple(tripple)
-        local subject = vector
-        local predicate = splittedTripple[3]
-        local object = splittedTripple[4]
-
-        if object == 'SYSTEM' then return true end
-
-        local ancestorIsAlreadyRetrieved = contains(nodeList, object);
-
-        if (not ancestorIsAlreadyRetrieved) then
-            table.insert(nodeList, object)
-
-            recursivelyRetrieveAncestorForNodeByID(object)
-        end
-    end
-
-end
-
-recursivelyRetrieveAncestorForNodeByID(node)
-
-return nodeList;`, 'ResourceRelationship', node)
-      .then(this.parseNode.bind(this));
+    return this.$datastore.evaluateLUAScriptByName('RetrieveAllAncestorsForNode', 'ResourceRelationship', stringifiedParsedNodeList)
+      .then(this.parseNode.bind(this))
+      .then((childrenNodeListAccumulator) => {
+        if (!nodeListIsArray) return childrenNodeListAccumulator[0];
+        else childrenNodeListAccumulator;
+      });
   }
 
   /**
    * Retrieves all the children of a given node.
    *
-   * @argument {String|Object} node
+   * @argument {String|Object|String[]|Object[]} node
    *
-   * @returns {Promise<String[]>}
+   * @returns {Promise<String[]|Array[]>}
    */
-  retrieveAllChildrenForNode (node) {
-    if (nucleusValidator.isObject(node)) {
-      const stringifiedNode = `${node.type}-${node.ID}`;
+  retrieveAllChildrenForNode (nodeList) {
+    const nodeListIsArray = nucleusValidator.isArray(nodeList);
+    const parsedNodeList = ((nodeListIsArray) ? nodeList : [ nodeList ])
+      .map((node) => {
+        if (nucleusValidator.isObject(node)) return `${node.type}-${node.ID}`;
+        else return node;
+      });
 
-      return this.retrieveAllChildrenForNode(stringifiedNode);
-    }
+    const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
-    return this.$datastore.evaluateLUAScript(`local itemKey = ARGV[1]
-local node = ARGV[2]
-
-local nodeList = {}
-
-local function contains(table, element)
-    for _, value in pairs(table) do
-        if value == element then
-            return true
-        end
-    end
-    return false
-end
-
--- Splits a tripple into a table
-local function splitTripple (tripple)
-    local splittedTripple = {}
-    local index = 1
-    for vector in string.gmatch(tripple, "([^:]+)") do
-        splittedTripple[index] = vector
-        index = index + 1
-    end
-
-    return splittedTripple
-end
-
-
--- Retrieve the ancestor for a given node
-local function recursivelyRetrieveChildrenForNodeByID(vector)
-    local ancestorNodeList = redis.call('ZRANGEBYLEX', itemKey, '[OPS:'.. vector ..':is-member-of', '[OPS:'.. vector ..':is-member-of:\xff')
-
-    if (table.getn(ancestorNodeList) == 0) then return true end
-
-    redis.log(redis.LOG_DEBUG, string.format("Nucleus: Retrieved %s children(s) for vector %s.", table.getn(ancestorNodeList), vector));
-
-    for index, tripple in pairs(ancestorNodeList) do
-
-        local splittedTripple = splitTripple(tripple)
-        local object = vector
-        local predicate = splittedTripple[3]
-        local subject = splittedTripple[4]
-
-        if subject == 'SYSTEM' then return true end
-
-        local ancestorIsAlreadyRetrieved = contains(nodeList, subject);
-
-        if (not ancestorIsAlreadyRetrieved) then
-            table.insert(nodeList, subject)
-
-            recursivelyRetrieveChildrenForNodeByID(subject)
-        end
-    end
-
-end
-
-recursivelyRetrieveChildrenForNodeByID(node)
-
-return nodeList;`, 'ResourceRelationship', node)
-      .then(this.parseNode.bind(this));
+    return this.$datastore.evaluateLUAScriptByName('RetrieveAllChildrenForNode', 'ResourceRelationship', stringifiedParsedNodeList)
+      .then(this.parseNode.bind(this))
+      .then((childrenNodeListAccumulator) => {
+        if (!nodeListIsArray) return childrenNodeListAccumulator[0];
+        else childrenNodeListAccumulator;
+      });
   }
 
   /**
@@ -400,3 +319,17 @@ return nodeList;`, 'ResourceRelationship', node)
 }
 
 module.exports = NucleusResourceRelationshipDatastore;
+
+function parseListForLUA (list) {
+
+  return `{ ${list
+    .reduce((accumulator, item, index, list) => {
+      if (!nucleusValidator.isString(item)) throw new NucleusError.UnexpectedValueTypeNucleusError(`The item must be a string, got ${typeof item}`);
+      
+      accumulator += `'${item}'`;
+
+      if (index + 1 !== list.length) accumulator += ',';
+
+      return accumulator;
+    }, '')} }`;
+}

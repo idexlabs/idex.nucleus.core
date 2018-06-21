@@ -3,10 +3,12 @@
 .docs/
 .dump/
 .idea/
+.nyc_output/
 .sass-cache/
 coverage/
 journal/
 node_modules/
+out/
 
 *.db
 *.iml

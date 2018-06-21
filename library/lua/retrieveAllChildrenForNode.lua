@@ -1,7 +1,8 @@
 local itemKey = ARGV[1]
-local node = ARGV[2]
+local nodeListStringified = ARGV[2]
 
-local nodeList = {}
+local nodeList = loadstring('return '..nodeListStringified)()
+local childNodeListAccumulator = {};
 
 local function contains(table, element)
     for _, value in pairs(table) do
@@ -26,33 +27,45 @@ end
 
 
 -- Retrieve the ancestor for a given node
-local function recursivelyRetrieveChildrenForNodeByID(vector)
-    local ancestorNodeList = redis.call('ZRANGEBYLEX', itemKey, '[OPS:'.. vector ..':is-member-of', '[OPS:'.. vector ..':is-member-of:\xff')
+local function retrieveAllChildrenForNode (node)
+    local nodeList = {};
 
-    if (table.getn(ancestorNodeList) == 0) then return true end
+    local function recursivelyRetrieveChildrenForNode(node)
+        local ancestorNodeList = redis.call('ZRANGEBYLEX', itemKey, '[OPS:'.. node ..':is-member-of', '[OPS:'.. node ..':is-member-of:\xff')
 
-    redis.log(redis.LOG_DEBUG, string.format("Nucleus: Retrieved %s children(s) for vector %s.", table.getn(ancestorNodeList), vector));
+        if (table.getn(ancestorNodeList) == 0) then return true end
 
-    for index, tripple in pairs(ancestorNodeList) do
+        redis.log(redis.LOG_DEBUG, string.format("Nucleus: Retrieved %s children(s) for vector %s.", table.getn(ancestorNodeList), node));
 
-        local splittedTripple = splitTripple(tripple)
-        local object = vector
-        local predicate = splittedTripple[3]
-        local subject = splittedTripple[4]
+        for index, tripple in pairs(ancestorNodeList) do
 
-        if subject == 'SYSTEM' then return true end
+            local splittedTripple = splitTripple(tripple)
+            local object = node
+            local predicate = splittedTripple[3]
+            local subject = splittedTripple[4]
 
-        local ancestorIsAlreadyRetrieved = contains(nodeList, subject);
+            if subject == 'SYSTEM' then return true end
 
-        if (not ancestorIsAlreadyRetrieved) then
-            table.insert(nodeList, subject)
+            local ancestorIsAlreadyRetrieved = contains(nodeList, subject);
 
-            recursivelyRetrieveChildrenForNodeByID(subject)
+            if (not ancestorIsAlreadyRetrieved) then
+                table.insert(nodeList, subject)
+
+                recursivelyRetrieveChildrenForNode(subject, nodeList)
+            end
         end
+
     end
 
+    recursivelyRetrieveChildrenForNode(node)
+
+    return nodeList
 end
 
-recursivelyRetrieveChildrenForNodeByID(node)
+for index, node in pairs(nodeList) do
+    local childNodeList = retrieveAllChildrenForNode(node)
 
-return nodeList;
+    table.insert(childNodeListAccumulator, childNodeList)
+end
+
+return childNodeListAccumulator;
