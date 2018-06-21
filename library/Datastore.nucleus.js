@@ -50,6 +50,7 @@ class NucleusDatastore {
     this.index = datastoreIndex;
 
     this.$$handlerCallbackListByChannelName = {};
+    this.scriptSHAbyScriptName = {};
 
     this.$$server = redis.createClient({
       db: datastoreIndex,
@@ -260,15 +261,49 @@ class NucleusDatastore {
   /**
    * Evaluates a LUA script.
    *
-   * @argument {String} LUAscript
+   * @argument {String} LUAScript
    * @argument {Array} argumentList
    *
    * @returns {Promise<*>}
    */
-  evaluateLUAScript (LUAscript, ...argumentList) {
+  evaluateLUAScript (LUAScript, ...argumentList) {
     const augmentedArgumentList = [argumentList.length].concat(Array.apply(null, { length: argumentList.length }).map((empty, index) => index), argumentList);
 
-    return this.$$server.evalAsync(LUAscript, augmentedArgumentList)
+    return this.$$server.evalAsync(LUAScript, augmentedArgumentList)
+      .then(NucleusDatastore.parseItem);
+  }
+
+  /**
+   * Evaluates a LUA script given its name.
+   * This assumes that the script was pre-loaded and its SHA ID has been stored.
+   *
+   * @argument {String} LUAScriptName
+   * @argument {Array} argumentList
+   *
+   * @returns {Promise<*>}
+   */
+  async evaluateLUAScriptByName (LUAScriptName, ...argumentList) {
+    const LUAScriptSHA = this.scriptSHAbyScriptName[LUAScriptName] || await this.retrieveItemFromHashFieldByName('LUAScriptSHAByScriptName', LUAScriptName);
+
+    if (!LUAScriptName) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieved any registered script for the LUA script "${LUAScriptName}".`);
+
+    return this.evaluateLUAScriptBySHA(LUAScriptSHA, ...argumentList);
+  }
+
+  /**
+   * Evaluates a LUA script given its SHA.
+   * @see {@link https://redis.io/commands/eval}
+   *
+   * @argument {String} LUAScriptSHA
+   * @argument {String} argumentList
+   *
+   * @returns {Promise<*>}
+   */
+  evaluateLUAScriptBySHA (LUAScriptSHA, ...argumentList) {
+    const augmentedArgumentList = [argumentList.length].concat(Array.apply(null, { length: argumentList.length }).map((empty, index) => index), argumentList);
+
+    console.log(LUAScriptSHA, augmentedArgumentList);
+    return this.$$server.evalshaAsync(LUAScriptSHA, augmentedArgumentList)
       .then(NucleusDatastore.parseItem);
   }
 
@@ -381,6 +416,22 @@ class NucleusDatastore {
         }
       }
     }
+  }
+
+  /**
+   * Registers a script given its name.
+   *
+   * @argument {String} scriptName
+   * @argument {String} script
+   *
+   * @returns {Promise<*>}
+   */
+  async registerScriptByName (scriptName, script) {
+    const scriptSHA = await this.$$server.scriptAsync('load', script);
+
+    this.scriptSHAbyScriptName[scriptName] = scriptSHA;
+
+    return this.addItemToHashFieldByName('LUAScriptSHAByScriptName', scriptName, scriptSHA);
   }
 
   removeTriplesFromHexastore (itemKey, subject, predicate, object) {
