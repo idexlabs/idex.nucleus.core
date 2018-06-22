@@ -775,6 +775,45 @@ mocha.suite.only("Nucleus Resource API", function () {
 
     });
 
+    mocha.suite("#retrieveAllResourcesByTypeForResourceByID", function () {
+
+      mocha.setup(function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        // Creating 6 dummies, in 3 different groups by 2 different users.
+        return Promise.all([
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '22d969f8-ef02-4e31-ae5f-24f9e864a390', name: 'Dummy 22d969f8-ef02-4e31-ae5f-24f9e864a390' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: 'b1947406-cdad-4c5c-9c44-8a544221b318', name: 'Dummy b1947406-cdad-4c5c-9c44-8a544221b318' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '88c1c8fc-c029-49fe-9ac2-7b572f98e646', name: 'Dummy 88c1c8fc-c029-49fe-9ac2-7b572f98e646' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '69b8a1da-95e1-4f20-8529-c03ba9bc7807'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: 'a96b075a-172a-45fe-af23-6cb3e5038573', name: 'Dummy a96b075a-172a-45fe-af23-6cb3e5038573' }, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c', 'Group', '69b8a1da-95e1-4f20-8529-c03ba9bc7807'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '84247275-311c-4858-9dab-f94c655e2b34', name: 'Dummy 84247275-311c-4858-9dab-f94c655e2b34' }, '1c76c8d1-8cdc-4c40-8132-36f657b5bf69', 'Group', '4648d7c6-0d2e-461c-a0ed-cbdb76d41a87'),
+          NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, { ID: '0b585001-5262-4a53-9007-d5cbc287f8ee', name: 'Dummy 0b585001-5262-4a53-9007-d5cbc287f8ee' }, '1c76c8d1-8cdc-4c40-8132-36f657b5bf69', 'Group', '61b27ed4-4b79-4b47-87c6-35440e2cc62a')
+        ]);
+      });
+
+      mocha.test("All the dummy resources for the group are retrieved.", function () {
+        const { $datastore, $resourceRelationshipDatastore } = this;
+
+        const groupID = '69b8a1da-95e1-4f20-8529-c03ba9bc7807';
+        const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
+
+        // 69b8a1da-95e1-4f20-8529-c03ba9bc7807 Group Dummy Permission: 24.791ms
+        // 69b8a1da-95e1-4f20-8529-c03ba9bc7807 Group Dummy Node: 5.853ms
+        // 69b8a1da-95e1-4f20-8529-c03ba9bc7807 Group Dummy Resource: 4.138ms
+
+        return NucleusResourceAPI.retrieveAllResourcesByTypeForResourceByID.call({ $datastore, $resourceRelationshipDatastore }, 'Group', groupID, 'Dummy', DummyResourceModel, originUserID)
+          .then(({ resourceList }) => {
+            // The user retrieve 2 dummies.
+            chai.expect(resourceList).to.have.length(2);
+            chai.expect(resourceList).to.have.nested.property('[0].resource.ID', '88c1c8fc-c029-49fe-9ac2-7b572f98e646');
+            chai.expect(resourceList).to.have.nested.property('[0].resource.type', 'Dummy');
+            chai.expect(resourceList).to.have.nested.property('[1].resource.ID', 'a96b075a-172a-45fe-af23-6cb3e5038573');
+            chai.expect(resourceList).to.have.nested.property('[1].resource.type', 'Dummy');
+          });
+      });
+
+    });
+
     mocha.suite("#retrieveBatchResourceByIDList", function () {
 
       mocha.setup(function () {

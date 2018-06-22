@@ -130,8 +130,8 @@ class NucleusResourceRelationshipDatastore {
     return this.$datastore.evaluateLUAScriptByName('RetrieveAllAncestorsForNode', 'ResourceRelationship', stringifiedParsedNodeList)
       .then(this.parseNode.bind(this))
       .then((childrenNodeListAccumulator) => {
-        if (!nodeListIsArray) return childrenNodeListAccumulator[0];
-        else childrenNodeListAccumulator;
+
+        return (nodeListIsArray) ? childrenNodeListAccumulator : childrenNodeListAccumulator[0];
       });
   }
 
@@ -155,8 +155,8 @@ class NucleusResourceRelationshipDatastore {
     return this.$datastore.evaluateLUAScriptByName('RetrieveAllChildrenForNode', 'ResourceRelationship', stringifiedParsedNodeList)
       .then(this.parseNode.bind(this))
       .then((childrenNodeListAccumulator) => {
-        if (!nodeListIsArray) return childrenNodeListAccumulator[0];
-        else childrenNodeListAccumulator;
+
+        return (nodeListIsArray) ? childrenNodeListAccumulator : childrenNodeListAccumulator[0];
       });
   }
 
