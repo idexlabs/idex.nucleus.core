@@ -302,7 +302,6 @@ class NucleusDatastore {
   evaluateLUAScriptBySHA (LUAScriptSHA, ...argumentList) {
     const augmentedArgumentList = [argumentList.length].concat(Array.apply(null, { length: argumentList.length }).map((empty, index) => index), argumentList);
 
-    console.log(LUAScriptSHA, augmentedArgumentList);
     return this.$$server.evalshaAsync(LUAScriptSHA, augmentedArgumentList)
       .then(NucleusDatastore.parseItem);
   }
