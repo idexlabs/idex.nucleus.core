@@ -285,7 +285,7 @@ class NucleusDatastore {
   async evaluateLUAScriptByName (LUAScriptName, ...argumentList) {
     const LUAScriptSHA = this.scriptSHAbyScriptName[LUAScriptName] || await this.retrieveItemFromHashFieldByName('LUAScriptSHAByScriptName', LUAScriptName);
 
-    if (!LUAScriptName) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieved any registered script for the LUA script "${LUAScriptName}".`);
+    if (!LUAScriptSHA) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieved any registered script for the LUA script "${LUAScriptName}".`);
 
     return this.evaluateLUAScriptBySHA(LUAScriptSHA, ...argumentList);
   }
