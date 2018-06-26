@@ -63,9 +63,15 @@ local function retrieveAllChildrenForNode (node)
 end
 
 for index, node in pairs(nodeList) do
-    local childNodeList = retrieveAllChildrenForNode(node)
+    if (redis.call('EXISTS', 'NodeList:HierarchyTreeDownward:' .. node) == 1) then
+        local cachedAncestorNodeList = redis.call('SMEMBERS', 'NodeList:HierarchyTreeDownward:' .. node)
 
-    table.insert(childNodeListAccumulator, childNodeList)
+        table.insert(childNodeListAccumulator, cachedAncestorNodeList)
+    else
+        local childNodeList = retrieveAllChildrenForNode(node)
+
+        table.insert(childNodeListAccumulator, childNodeList)
+    end
 end
 
 return childNodeListAccumulator;

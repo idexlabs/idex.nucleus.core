@@ -140,6 +140,7 @@ class NucleusResourceAPI {
 
         return Promise.all([
           $datastore.addItemToHashFieldByName(resourceItemKey, $resource),
+          // This doesn't seem to be used anywhere and should be removed.
           $datastore.addItemToSetByName(RESOURCE_ID_BY_TYPE_TABLE_NAME, resourceType, $resource.ID),
         ])
           .then(() => {
@@ -399,7 +400,10 @@ class NucleusResourceAPI {
         const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
 
         userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
-          .forEach(anchorNodeIsList.push.bind(anchorNodeIsList));
+          .forEach((node) => {
+
+            anchorNodeIsList.push(node);
+          });
 
       }
         break;
@@ -410,7 +414,10 @@ class NucleusResourceAPI {
         const userCurrentNodeChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userCurrentNodeList[0]);
 
         userCurrentNodeList.slice(0).concat(userCurrentNodeChildrenNodeList)
-          .forEach(anchorNodeIsList.push.bind(anchorNodeIsList));
+          .forEach((node) => {
+
+            anchorNodeIsList.push(node);
+          });
       }
         break;
 

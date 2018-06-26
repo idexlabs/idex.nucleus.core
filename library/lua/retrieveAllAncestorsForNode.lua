@@ -63,9 +63,19 @@ local function retrieveAllAncestorsForNode (node)
 end
 
 for index, node in pairs(nodeList) do
-    local ancestorNodeList = retrieveAllAncestorsForNode(node)
+    if (redis.call('EXISTS', 'NodeList:HierarchyTreeUpward:' .. node) == 1) then
+        redis.log(redis.LOG_DEBUG, "FU0");
 
-    table.insert(ancestorNodeListAccumulator, ancestorNodeList)
+        local cachedAncestorNodeList = redis.call('SMEMBERS', 'NodeList:HierarchyTreeUpward:' .. node)
+
+        table.insert(ancestorNodeListAccumulator, cachedAncestorNodeList)
+    else
+        redis.log(redis.LOG_DEBUG, "FU1");
+
+        local ancestorNodeList = retrieveAllAncestorsForNode(node)
+
+        table.insert(ancestorNodeListAccumulator, ancestorNodeList)
+    end
 end
 
 return ancestorNodeListAccumulator;

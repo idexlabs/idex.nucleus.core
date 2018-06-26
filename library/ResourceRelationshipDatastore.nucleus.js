@@ -32,13 +32,15 @@ class NucleusResourceRelationshipDatastore {
       .then(() => {
 
         return Promise.all([
+          fsReadFilePromisified(path.join(__dirname, '/lua/registerNodeToAllAncestors.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllAncestorsForNode.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8')
         ]);
       })
-      .then(([ retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript ]) => {
+      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript ]) => {
 
         return Promise.all([
+          this.$datastore.registerScriptByName('RegisterNodeToAllAncestors', registerNodeToAllAncestorsScript),
           this.$datastore.registerScriptByName('RetrieveAllAncestorsForNode', retrieveAllAncestorsForNodeScript),
           this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript)
         ]);
@@ -70,7 +72,13 @@ class NucleusResourceRelationshipDatastore {
     if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${subject}"`);
     if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${object}"`);
 
-    return this.$datastore.addTripleToHexastore('ResourceRelationship', subject, predicate, object);
+    return this.$datastore.addTripleToHexastore('ResourceRelationship', subject, predicate, object)
+      .then(() => {
+        if (predicate === 'is-member-of') {
+
+          return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', 'ResourceRelationship', object);
+        }
+      });
   }
 
   /**
@@ -128,10 +136,14 @@ class NucleusResourceRelationshipDatastore {
     const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
     return this.$datastore.evaluateLUAScriptByName('RetrieveAllAncestorsForNode', 'ResourceRelationship', stringifiedParsedNodeList)
-      .then(this.parseNode.bind(this))
-      .then((childrenNodeListAccumulator) => {
+      .then((ancestorNodeListAccumulator) => {
 
-        return (nodeListIsArray) ? childrenNodeListAccumulator : childrenNodeListAccumulator[0];
+        return ancestorNodeListAccumulator
+          .map(this.parseNode.bind(this));
+      })
+      .then((ancestorNodeListAccumulator) => {
+
+        return (nodeListIsArray) ? ancestorNodeListAccumulator : ancestorNodeListAccumulator[0];
       });
   }
 
@@ -153,7 +165,11 @@ class NucleusResourceRelationshipDatastore {
     const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
     return this.$datastore.evaluateLUAScriptByName('RetrieveAllChildrenForNode', 'ResourceRelationship', stringifiedParsedNodeList)
-      .then(this.parseNode.bind(this))
+      .then((childrenNodeListAccumulator) => {
+
+        return childrenNodeListAccumulator
+          .map(this.parseNode.bind(this));
+      })
       .then((childrenNodeListAccumulator) => {
 
         return (nodeListIsArray) ? childrenNodeListAccumulator : childrenNodeListAccumulator[0];
