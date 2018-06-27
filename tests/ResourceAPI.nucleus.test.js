@@ -32,7 +32,7 @@ class DummyResourceModel extends NucleusResource {
 
 }
 
-mocha.suite.only("Nucleus Resource API", function () {
+mocha.suite("Nucleus Resource API", function () {
 
   mocha.suiteSetup(function () {
     const $datastore = new NucleusDatastore('Test', {
@@ -711,7 +711,7 @@ mocha.suite.only("Nucleus Resource API", function () {
         ]);
       });
 
-      mocha.test("All the members of the node is retrieved.", function () {
+      mocha.test("All the members of the node are retrieved.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
@@ -729,6 +729,10 @@ mocha.suite.only("Nucleus Resource API", function () {
               {
                 ID: 'b1947406-cdad-4c5c-9c44-8a544221b318',
                 type: 'Dummy'
+              },
+              {
+                ID: '69b8a1da-95e1-4f20-8529-c03ba9bc7807',
+                type: 'Group'
               },
               {
                 ID: originUserID,
