@@ -24,7 +24,7 @@ const DATASTORE_INDEX = 0;
 const DATASTORE_URL = 'localhost';
 const DATASTORE_PORT = 6379;
 
-mocha.suite('Nucleus Engine', function () {
+mocha.suite.skip('Nucleus Engine', function () {
 
   mocha.suiteSetup(function () {
     const $dummyEngine = new DummyEngine();
