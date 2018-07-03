@@ -20,7 +20,7 @@ Promise.promisifyAll(fs);
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
 
-const $$dotNotationKeyRegularExpression = /[A-Za-z0-9-_$]+\.[A-Za-z0-9-_$]/;
+const $$dotNotationKeyRegularExpression = /[A-Za-z0-9-_$](([[0-9]+])|(\.[A-Za-z0-9-_$]))+/;
 const $$keyspaceNotificationChannelNameRegularExpression = new RegExp('__keyspace@[0-9]__:.*|__keyevent@[0-9]__:.*');
 const $$predicateRegularExpression = new RegExp('SOP\\:[A-Za-z0-9\\-]+\\:[A-Za-z0-9\\-]+\\:([A-Za-z0-9\\-]+)');
 
@@ -614,7 +614,7 @@ class NucleusDatastore {
       const dotNotationFieldNameList = fieldNameList
         .filter((fieldName) => {
 
-          return $$dotNotationKeyRegularExpression.test(fieldName)
+          return $$dotNotationKeyRegularExpression.test(fieldName);
         });
 
       if (dotNotationFieldNameList.length > 0 && dotNotationFieldNameList.length !== fieldNameList.length) throw new NucleusError.UnexpectedValueNucleusError("The field name list must be only field names to retrieve a group or use dot notation to retrieve a specific field's value, not both.");
@@ -773,22 +773,25 @@ class NucleusDatastore {
       .reduce((accumulator, propertyName) => {
         const value = object[propertyName];
         if ($$dotNotationKeyRegularExpression.test(propertyName)) {
-          const dotNotationPropertyList = propertyName.split('.');
+          const dotNotationPropertyList = propertyName.replace(/\]$/, '').split(/[.\[\]]+/g);
 
           dotNotationPropertyList
             .reduce((accumulator, propertyName, index, list) => {
               if (index + 1 !== list.length) {
                 if (!(propertyName in accumulator)) {
-                  // TODO: Handle array
-                  accumulator[propertyName] = {};
+                  if (/[0-9]+/.test(list[index + 1]) && !(propertyName in accumulator)) accumulator[propertyName] = [];
+                  else accumulator[propertyName] = {};
                 }
 
                 return accumulator[propertyName];
               } else {
-                accumulator[propertyName] = (value === null) ? undefined : value;
-
-                return accumulator;
+                // If the property is a number, collapse as an array.
+                if (nucleusValidator.isArray(accumulator)) {
+                  accumulator[propertyName] = value;
+                } else accumulator[propertyName] = (value === null) ? undefined : value;
               }
+
+              return accumulator;
             }, accumulator);
         } else accumulator[propertyName] = (value === null) ? undefined : value;
 

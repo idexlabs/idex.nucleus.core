@@ -116,8 +116,8 @@ mocha.suite("Nucleus Datastore", function () {
       chai.expect(expandedObject.a.b.d).to.equal('D');
       chai.expect(expandedObject.a.b.e).to.equal('E');
       chai.expect(expandedObject.f.g.h).to.equal('H');
-      // chai.expect(expandedObject.i[0]).to.equal('I');
-      // chai.expect(expandedObject.i[0].k).to.equal('K');
+      chai.expect(expandedObject.i[0]).to.equal('I');
+      chai.expect(expandedObject.j[0].k).to.equal('K');
     });
 
     mocha.test("Expands dot notation object2", function () {
