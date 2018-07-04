@@ -746,6 +746,69 @@ return { itemIDA, itemIDB, itemIDC }
 
   });
 
+  mocha.suite("#searchItemInHashByName", function () {
+
+    mocha.setup(function () {
+      const { $datastore } = this;
+
+      return $datastore.addItemToHashFieldByName('SearchableDummy', [
+        'object1.property1',
+        '23a46e3b-a2fc-4aa7-8490-0a1dd5dba48c',
+        'object1.property2',
+        '38073028-8d2d-4297-9426-8c6c8a9efaa1',
+        'object2.array1[0]',
+        '84cbe302-70cd-488d-8fb4-fa581c5910d6',
+        'object2.array1[1]',
+        '6036c522-80d4-4327-9ba4-4fd07cad11e8',
+        'object3.object4.property3',
+        '69c6c5d1-7c40-4a1a-9d35-366b1bfcad35',
+      ]);
+    });
+
+    mocha.test("The nested property is retrieved when called directly.", async function () {
+      const { $datastore } = this;
+
+      const { object1: { property1: value1 } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object1.property1');
+      const { object1: { property2: value2 } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object1.property2');
+      const { object2: { array1: [ value3 ] } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object2.array1[0]');
+      const { object2: { array1: [ empty, value4 ] } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object2.array1[1]');
+      const { object3: { object4: { property3: value5 } } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object3.object4.property3');
+
+      chai.expect(value1).to.equal('23a46e3b-a2fc-4aa7-8490-0a1dd5dba48c');
+      chai.expect(value2).to.equal('38073028-8d2d-4297-9426-8c6c8a9efaa1');
+      chai.expect(value3).to.equal('84cbe302-70cd-488d-8fb4-fa581c5910d6');
+      chai.expect(value4).to.equal('6036c522-80d4-4327-9ba4-4fd07cad11e8');
+      chai.expect(value5).to.equal('69c6c5d1-7c40-4a1a-9d35-366b1bfcad35');
+    });
+
+    mocha.test("All the nested properties are retrieved when called as a group.", async function () {
+      const { $datastore } = this;
+
+      const { object1: { property1: value1, property2: value2 } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object1');
+
+      chai.expect(value1).to.equal('23a46e3b-a2fc-4aa7-8490-0a1dd5dba48c');
+      chai.expect(value2).to.equal('38073028-8d2d-4297-9426-8c6c8a9efaa1');
+    });
+
+    mocha.test("All members are retrieved when called as a group.", async function () {
+      const { $datastore } = this;
+
+      const { object2: { array1: [ value1, value2 ] } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object2.array1');
+
+      chai.expect(value1).to.equal('84cbe302-70cd-488d-8fb4-fa581c5910d6');
+      chai.expect(value2).to.equal('6036c522-80d4-4327-9ba4-4fd07cad11e8');
+    });
+
+    mocha.test("All the nested properties are retrieved when called as a nested group.", async function () {
+      const { $datastore } = this;
+
+      const { object3: { object4: { property3: value1 } } } = await $datastore.searchItemInHashByName('SearchableDummy', 'object3');
+
+      chai.expect(value1).to.equal('69c6c5d1-7c40-4a1a-9d35-366b1bfcad35');
+    });
+
+  });
+
   mocha.suite("Hexastore", function () {
 
     mocha.suite("#addTripleToHexastore", function () {

@@ -606,20 +606,29 @@ class NucleusDatastore {
    *
    * @return {*}
    */
-  searchItemInHashByName (itemKey, fieldName) {
+  async searchItemInHashByName (itemKey, fieldName) {
     if (nucleusValidator.isArray(fieldName)) {
       const fieldNameList = fieldName;
 
-      if (!nucleusValidator.isArray(fieldNameList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The field name list must be an array.");
-      const dotNotationFieldNameList = fieldNameList
+      const fieldNameAsDotNotationCount = fieldNameList
         .filter((fieldName) => {
 
           return $$dotNotationKeyRegularExpression.test(fieldName);
-        });
+        }).length;
 
-      if (dotNotationFieldNameList.length > 0 && dotNotationFieldNameList.length !== fieldNameList.length) throw new NucleusError.UnexpectedValueNucleusError("The field name list must be only field names to retrieve a group or use dot notation to retrieve a specific field's value, not both.");
+      const fieldNameThatExistsCount = (await Promise.all(fieldNameList
+        .map((fieldName) => {
 
-      const fieldNamesAreDotNotation = dotNotationFieldNameList.length === fieldNameList.length;
+          return this.$$server.hexistsAsync(itemKey, fieldName);
+        }))
+        .then((fieldNameExistsList) => {
+
+          return fieldNameExistsList.filter(Boolean);
+        })).length;
+
+      if (fieldNameAsDotNotationCount > 0 && fieldNameAsDotNotationCount !== fieldNameList.length) throw new NucleusError.UnexpectedValueNucleusError("The field name list must be only field names to retrieve a group or use dot notation to retrieve a specific field's value, not both.");
+
+      const fieldNamesAreDotNotation = fieldNameAsDotNotationCount === fieldNameList.length && fieldNameThatExistsCount === fieldNameList.length;
 
       if (fieldNamesAreDotNotation) return this.retrieveItemFromHashFieldByName.apply(this, [itemKey].concat(fieldNameList))
         .then((itemList) => {
@@ -660,30 +669,30 @@ class NucleusDatastore {
           });
       }
 
-      return this.retrieveItemFromHashFieldByName.apply(this, [itemKey].concat(fieldNameList));
-    }
+      // return this.retrieveItemFromHashFieldByName.apply(this, [itemKey].concat(fieldNameList));
+    } else if (nucleusValidator.isString(fieldName)) {
+      const fieldNameIsDotNotation = $$dotNotationKeyRegularExpression.test(fieldName);
 
-    if (!nucleusValidator.isString(fieldName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The field name must be a string.");
+      const fieldExists = await this.$$server.hexistsAsync(itemKey, fieldName);
 
-    const fieldNameIsDotNotation = $$dotNotationKeyRegularExpression.test(fieldName);
+      if (fieldNameIsDotNotation && fieldExists) return this.retrieveItemFromHashFieldByName(itemKey, fieldName)
+        .then((item) => {
 
-    if (fieldNameIsDotNotation) return this.retrieveItemFromHashFieldByName(itemKey, fieldName)
-      .then((item) => {
+          // TODO: Change this
+          return NucleusDatastore.expandDotNotationObject({[fieldName]: item});
+        });
+      else return this.$$server.hscanAsync(itemKey, 0, 'MATCH', `${fieldName}*`)
+        .then(([ cursor, itemHashList ]) => {
+          // HSCAN returns an array that contains the keys and values.
+          const parsedHashItems = NucleusDatastore.parseHashItem(itemHashList);
+          // Any Redis item's value is likely to be JSON.
+          const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
+          // Settings objects are likely to have dot notation properties.
+          const items = NucleusDatastore.expandDotNotationObject(parsedJSONItems);
 
-        // TODO: Change this
-        return NucleusDatastore.expandDotNotationObject({[fieldName]: item});
-      });
-    else return this.$$server.hscanAsync(itemKey, 0, 'MATCH', `${fieldName}*`)
-      .then(([ cursor, itemHashList ]) => {
-        // HSCAN returns an array that contains the keys and values.
-        const parsedHashItems = NucleusDatastore.parseHashItem(itemHashList);
-        // Any Redis item's value is likely to be JSON.
-        const parsedJSONItems = NucleusDatastore.parseItem(parsedHashItems);
-        // Settings objects are likely to have dot notation properties.
-        const items = NucleusDatastore.expandDotNotationObject(parsedJSONItems);
-
-        return items;
-      });
+          return items;
+        });
+    } else throw new NucleusError.UnexpectedValueTypeNucleusError("The field name must be a string or a list of string.");
   }
 
   /**
@@ -779,7 +788,7 @@ class NucleusDatastore {
             .reduce((accumulator, propertyName, index, list) => {
               if (index + 1 !== list.length) {
                 if (!(propertyName in accumulator)) {
-                  if (/[0-9]+/.test(list[index + 1]) && !(propertyName in accumulator)) accumulator[propertyName] = [];
+                  if (/^[0-9]+$/.test(list[index + 1]) && !(propertyName in accumulator)) accumulator[propertyName] = [];
                   else accumulator[propertyName] = {};
                 }
 
@@ -788,6 +797,7 @@ class NucleusDatastore {
                 // If the property is a number, collapse as an array.
                 if (nucleusValidator.isArray(accumulator)) {
                   accumulator[propertyName] = value;
+                  accumulator = accumulator.filter(Boolean);
                 } else accumulator[propertyName] = (value === null) ? undefined : value;
               }
 

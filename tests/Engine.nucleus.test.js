@@ -435,7 +435,7 @@ mocha.suite('Nucleus Engine', function () {
 
     });
 
-    mocha.suite.only("Load testing", function () {
+    mocha.suite("Load testing", function () {
       // NOTE: Test aren't satisfactory. There is a clear degradation as the number of request increase.
       // 50, 100 or more requests made under a second is an unusual load, but the process needs to be optimized.
 
@@ -474,7 +474,7 @@ mocha.suite('Nucleus Engine', function () {
 
       });
 
-      mocha.suite.only("Full request loop", function () {
+      mocha.suite("Full request loop", function () {
         const requestCountList = [ 1, 25, 50, 100, 500 ];
 
         // Before debounce
@@ -517,7 +517,7 @@ mocha.suite('Nucleus Engine', function () {
 
       });
 
-      mocha.suite.only("Full request loop with random execution time", function () {
+      mocha.suite("Full request loop with random execution time", function () {
         const requestCountList = [ 1, 25, 50, 100, 500, 1000 ];
 
         mocha.suiteSetup(function () {
