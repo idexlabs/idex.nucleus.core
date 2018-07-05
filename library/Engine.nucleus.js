@@ -315,7 +315,7 @@ class NucleusEngine {
 
           if (nucleusValidator.isEmpty(extendableActionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`${actionNameToExtend} is not an extendable action.`, { actionID, actionName });
 
-          const { extendableActionArgumentDefault = {}, actionAlternativeSignature, actionSignature = [], contextName = '', filePath = '', methodName = '' } = extendableActionConfiguration;
+          const { extendableActionArgumentDefault = {}, actionAlternativeSignature, actionSignature = [], contextName = '', extendableEventName, filePath = '', methodName = '' } = extendableActionConfiguration;
           const argumentConfigurationByArgumentName = Object.assign({}, extendableActionConfiguration.argumentConfigurationByArgumentName, actionConfiguration.argumentConfigurationByArgumentName);
 
           const actionSignatureList = [ actionSignature, actionAlternativeSignature ];
@@ -345,14 +345,33 @@ class NucleusEngine {
 
           const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), actionSignatureList, argumentConfigurationByArgumentName, parsedExtendableActionArgumentDefault);
 
-          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
+          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
+            .then((actionResponse) => {
+              if (!extendableEventName) return actionResponse;
+
+              const eventName = NucleusEngine.parseTemplateString.call(this, actionToExtendContext, extendableEventName);
+              const $event = new NucleusEvent(eventName, actionResponse, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+
+              this.publishEventToChannelByName(eventName, $event);
+
+              return actionResponse;
+            });
         } else {
-          const { contextName = '', filePath = '', argumentConfigurationByArgumentName = {}, methodName = '', actionSignature = [], actionAlternativeSignature } = actionConfiguration;
+          const { argumentConfigurationByArgumentName = {}, actionSignature = [], actionAlternativeSignature, contextName = '',  eventName, filePath = '', methodName = '' } = actionConfiguration;
 
           // Make sure that the message meets one of the proposed signature criteria.
           const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), [ actionSignature, actionAlternativeSignature ], argumentConfigurationByArgumentName);
 
-          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName);
+          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
+            .then((actionResponse) => {
+              if (!eventName) return actionResponse;
+
+              const $event = new NucleusEvent(eventName, actionResponse, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+
+              this.publishEventToChannelByName(eventName, $event);
+
+              return actionResponse;
+            });
         }
       }).call(this);
 
@@ -515,6 +534,21 @@ end
     const { propertiesByArgumentName = {} } = await this.retrieveResourceStructureByResourceType(resourceType) || {};
 
     return NucleusResource.bind(null, resourceType, propertiesByArgumentName);
+  }
+
+  /**
+   * Subscribes and handles an event given a channel name.
+   *
+   * @argument {String} channelName
+   * @argument {NucleusEvent} $event
+   *
+   * @returns {Promise<Object>}
+   */
+  subscribeAndHandleEventByChannelName (channelName, $event) {
+
+    this.$eventSubscriberDatastore.subscribeToChannelName(channelName);
+
+    return this.$eventSubscriberDatastore.handleEventByChannelName(channelName, $event);
   }
 
   /**

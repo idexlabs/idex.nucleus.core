@@ -173,6 +173,7 @@ mocha.suite('Nucleus Engine', function () {
       await $dummyEngine.storeActionConfiguration({
         actionName: 'ExecuteSimpleDummy',
         contextName: 'Self',
+        eventName: 'SimpleDummyExecuted',
         methodName: 'executeSimpleDummy'
       });
 
@@ -316,6 +317,27 @@ mocha.suite('Nucleus Engine', function () {
           .to.be.rejectedWith(NucleusError);
       });
 
+      mocha.test("The action's event is correctly published.", async function () {
+        const { $dummyEngine } = this;
+        const AID4 = uuid.v4();
+        const AID3 = uuid.v4();
+
+        const $action = new NucleusAction('ExecuteSimpleDummy', {});
+
+        const $$eventPromise = new Promise((resolve) => {
+
+          $dummyEngine.subscribeAndHandleEventByChannelName('SimpleDummyExecuted', ({ message: { AID } }) => {
+            chai.expect(AID).to.be.a('string');
+
+            resolve();
+          });
+        });
+        
+        await $dummyEngine.executeAction($action);
+
+        return $$eventPromise;
+      });
+
       mocha.suite("Extendable action", function () {
 
         mocha.suiteSetup(async function () {
@@ -361,6 +383,27 @@ mocha.suite('Nucleus Engine', function () {
           const { finalMessage } = await $dummyEngine.executeAction($action);
 
           chai.expect(finalMessage).to.deep.equal({ AID1: '85b4a289-8a31-428b-9c7a-dea7538cb116', AID2: AID4, AID3 });
+        });
+
+        mocha.test("The action's event is correctly published.", async function () {
+          const { $dummyEngine } = this;
+          const AID4 = uuid.v4();
+          const AID3 = uuid.v4();
+
+          const $action = new NucleusAction('ExtendDummy', { AID4, AID3 });
+
+          const $$eventPromise = new Promise((resolve) => {
+
+            $dummyEngine.subscribeAndHandleEventByChannelName('DummyExtended', ({ message: eventMessage }) => {
+              chai.expect(eventMessage).to.deep.equal({ AID1: '85b4a289-8a31-428b-9c7a-dea7538cb116', AID2: AID4, AID3 });
+
+              resolve();
+            });
+          });
+
+          await $dummyEngine.executeAction($action);
+
+          return $$eventPromise;
         });
 
       });
@@ -435,7 +478,7 @@ mocha.suite('Nucleus Engine', function () {
 
     });
 
-    mocha.suite("Load testing", function () {
+    mocha.suite.skip("Load testing", function () {
       // NOTE: Test aren't satisfactory. There is a clear degradation as the number of request increase.
       // 50, 100 or more requests made under a second is an unusual load, but the process needs to be optimized.
 
@@ -452,7 +495,7 @@ mocha.suite('Nucleus Engine', function () {
           .then(console.log);
       });
 
-      mocha.suite.skip("Action publication", function () {
+      mocha.suite("Action publication", function () {
         const requestCountList = [ 25, 50, 100, 500 ];
 
         requestCountList
