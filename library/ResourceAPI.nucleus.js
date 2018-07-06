@@ -710,7 +710,7 @@ class NucleusResourceAPI {
     if (!$resourceRelationshipDatastore) return { canRetrieveResource: true };
 
     const userAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: userID, type: 'User' });
-    const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0]);
+    const userDirectAncestorChildrenNodeList = await NucleusResourceAPI.walkHierarchyTreeDownward.call(this, userAncestorNodeList[0] || "SYSTEM");
     const resourceAncestorNodeList = await NucleusResourceAPI.walkHierarchyTreeUpward.call(this, { ID: resourceID, type: resourceType });
 
     const nodeIDIntersectionList = userAncestorNodeList.slice(0).concat(userDirectAncestorChildrenNodeList)
