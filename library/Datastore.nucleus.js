@@ -364,16 +364,20 @@ class NucleusDatastore {
       if ($$keyspaceNotificationChannelNameRegularExpression.test(channelName)) {
 
         this.executeHandlerCallbackForChannelName(channelName, data)
-          .catch(this.$logger.error);
+          .catch((error) => {
+            this.$logger.error(error);
+          });
       } else {
         const parsedData = NucleusDatastore.parseItem(data);
 
         if (parsedData.hasOwnProperty('name') && parsedData.hasOwnProperty('message')) {
           const { meta, message, name } = parsedData;
-          const $event = new NucleusEvent(name, message, meta);
+          const $event = new NucleusEvent(name, message, Object.assign({}, meta, { originUserID: meta.authorUserID }));
 
           this.executeHandlerCallbackForChannelName(channelName, $event)
-            .catch(this.$logger.error);
+            .catch((error) => {
+              this.$logger.error(error);
+            });
         }
       }
     }
