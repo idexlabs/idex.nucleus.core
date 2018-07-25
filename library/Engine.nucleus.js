@@ -422,12 +422,14 @@ class NucleusEngine {
       .reduce((accumulator, argumentName) => {
         if (argumentName === 'options' && !('options' in actionMessage)) accumulator.push(actionMessage);
         else if (argumentName === 'originUserID') accumulator.push($action.originUserID);
+        else if (argumentName === 'correlationID') accumulator.push($action.meta.correlationID);
         else accumulator.push(actionMessage[argumentName]);
 
         return accumulator;
       }, []);
 
     if (!actionSignature.includes('originUserID')) argumentList.push($action.originUserID);
+    if (!actionSignature.includes('correlationID')) argumentList.push($action.meta.correlationID);
 
     const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
