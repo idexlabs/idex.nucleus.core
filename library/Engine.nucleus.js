@@ -292,7 +292,7 @@ class NucleusEngine {
    * @returns {Promise<NucleusAction>}
    */
   async executeAction ($action) {
-    const { ID: actionID, name: actionName, originalMessage: actionMessage, } = $action;
+    const { ID: actionID, meta: { correlationID }, name: actionName, originalMessage: actionMessage, } = $action;
     const actionItemKey = $action.generateOwnItemKey();
 
     try {
@@ -301,7 +301,7 @@ class NucleusEngine {
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
-      this.$logger.info(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName });
+      this.$logger.info(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName, correlationID });
 
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
       await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
@@ -350,7 +350,7 @@ class NucleusEngine {
               if (!extendableEventName) return actionResponse;
 
               const eventName = NucleusEngine.parseTemplateString.call(this, actionToExtendContext, extendableEventName);
-              const $event = new NucleusEvent(eventName, actionResponse, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
 
               this.publishEventToChannelByName(eventName, $event);
 
@@ -366,7 +366,7 @@ class NucleusEngine {
             .then((actionResponse) => {
               if (!eventName) return actionResponse;
 
-              const $event = new NucleusEvent(eventName, actionResponse, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
 
               this.publishEventToChannelByName(eventName, $event);
 
@@ -390,11 +390,11 @@ class NucleusEngine {
 
       // await this.publishEventToChannelByName(`Action:${actionID}`, $event);
 
-      this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName });
+      this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName, correlationID });
 
       return Promise.resolve($action);
     } catch (error) {
-      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { error });
+      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { actionID, actionName, correlationID, error });
 
       this.$logger.error(error);
 
@@ -567,13 +567,13 @@ end
   async publishActionToQueueByName (actionQueueName, $action) {
     if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string.");
     if (!($action instanceof NucleusAction)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action is not a valid Nucleus action.");
-    const { ID: actionID, name: actionName } = $action;
+    const { ID: actionID, meta: { correlationID }, name: actionName } = $action;
 
     const { isMember: actionQueueNameRegistered } = await this.$actionDatastore.itemIsMemberOfSet(ACTION_QUEUE_NAME_SET_ITEM_NAME_TABLE_NAME, actionQueueName);
 
     if (!actionQueueNameRegistered) throw new NucleusError.UndefinedContextNucleusError(`The action queue name ${actionQueueName} doesn't exist or has not been properly registered.`);
 
-    this.$logger.debug(`Publishing action "${actionName} (${actionID})" to action queue "${actionQueueName}"...`, { actionID, actionName, actionQueueName });
+    this.$logger.debug(`Publishing action "${actionName} (${actionID})" to action queue "${actionQueueName}"...`, { actionID, actionName, actionQueueName, correlationID });
 
     const actionKeyName = $action.generateOwnItemKey();
 
@@ -589,7 +589,7 @@ end
       .pexpire(actionKeyName, this.actionTTL)
       .execAsync()
       .tap(() => {
-        this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully published.`, { actionID, actionName, actionQueueName });
+        this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully published.`, { actionID, actionName, actionQueueName, correlationID });
       })
       .return({ actionQueueName, $action });
   }
@@ -605,7 +605,10 @@ end
    *
    * @returns {Promise<Object>}
    */
-  async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, originUserID, actionHangupTimeout = this.defautlActionHangupTimeout) {
+  async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, options = {}) {
+    const originUserID = (nucleusValidator.isObject(options)) ? options.originUserID : options;
+    const correlationID = (nucleusValidator.isObject(options)) ? options.correlationID : undefined;
+    
     if (!nucleusValidator.isString(actionName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action name must be a string.");
     if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
@@ -613,7 +616,7 @@ end
     const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName);
     if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError(`Could not executed the action "${actionName}" because it wasn't registered properly.`);
 
-    const $action = new NucleusAction(actionName, actionMessage, { originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
+    const $action = new NucleusAction(actionName, actionMessage, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
     const $$actionResponsePromise = new Promise(async (resolve, reject) => {
       const actionItemKey = $action.generateOwnItemKey();
@@ -727,9 +730,9 @@ end
   publishEventToChannelByName (channelName, $event) {
     if (!nucleusValidator.isString(channelName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event channel name must be a string.");
     if (!($event instanceof NucleusEvent)) throw new NucleusError.UnexpectedValueTypeNucleusError("The event is not a valid Nucleus event.");
-    const { ID: eventID, name: eventName } = $event;
+    const { ID: eventID, meta: { correlationID }, name: eventName } = $event;
 
-    this.$logger.debug(`Publishing event "${eventName} (${eventID})" to channel "${channelName}"...`, { channelName, eventID, eventName });
+    this.$logger.debug(`Publishing event "${eventName} (${eventID})" to channel "${channelName}"...`, { channelName, correlationID, eventID, eventName });
 
     const timestamp = Date.now();
 
@@ -748,7 +751,7 @@ end
       .publish(channelName, JSON.stringify($event))
       .execAsync()
       .tap(() => {
-        this.$logger.debug(`The event "${eventName} (${eventID})" has been successfully published.`, { channelName, eventID, eventName });
+        this.$logger.debug(`The event "${eventName} (${eventID})" has been successfully published.`, { channelName, correlationID, eventID, eventName });
       })
       .return({ channelName, $event });
   }
@@ -795,9 +798,9 @@ end
       const actionItemKey = (await $handlerDatastore.$$server.brpopAsync(actionQueueName, 0))[1];
 
       const $action = new NucleusAction(await (this.$actionDatastore.retrieveAllItemsFromHashByName(actionItemKey)));
-      const { ID: actionID, name: actionName } = $action;
+      const { ID: actionID, meta: { correlationID }, name: actionName } = $action;
 
-      this.$logger.debug(`Retrieved a pending action "${actionName} (${actionID})" from action queue "${actionQueueName}".`, { actionID, actionName, actionQueueName });
+      this.$logger.debug(`Retrieved a pending action "${actionName} (${actionID})" from action queue "${actionQueueName}".`, { actionID, actionName, actionQueueName, correlationID });
       // if (NODE_ENVIRONMENT === DEVELOPMENT_ENVIRONMENT_NAME) {
       //   try {
       //     const actionQueueItemCount = await this.$actionDatastore.$$server.llenAsync(actionQueueName);

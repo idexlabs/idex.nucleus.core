@@ -50,9 +50,12 @@ class NucleusEvent extends NucleusResource {
     else {
       if (!nucleusValidator.isString(eventName) || nucleusValidator.isEmpty(eventName)) throw new NucleusError.UndefinedValueNucleusError("The event name is mandatory.");
 
-      const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
+      const { correlationID, originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
+      const eventAttributes = { meta: { originEngineID, originEngineName, originProcessID }, name: eventName, message: eventMessage };
 
-      super('NucleusEvent', eventResourceStructure, { meta: { originEngineID, originEngineName, originProcessID }, name: eventName, message: eventMessage }, originUserID);
+      if (!!correlationID) eventAttributes.meta.correlationID = correlationID;
+
+      super('NucleusEvent', eventResourceStructure, eventAttributes, originUserID);
 
       /** @member {String} name */
       Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });

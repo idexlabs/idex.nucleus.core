@@ -92,9 +92,12 @@ class NucleusAction extends NucleusResource {
     else {
       if (!nucleusValidator.isString(actionName) || nucleusValidator.isEmpty(actionName)) throw new NucleusError.UndefinedValueNucleusError("The action name is mandatory.");
 
-      const { originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
+      const { correlationID, originEngineID = 'Unknown', originEngineName = 'Unknown', originProcessID = process.pid, originUserID = 'Unknown' } = options;
+      const actionAttributes = { meta: { originEngineID, originEngineName, originProcessID }, name: actionName, originalMessage: actionMessage };
 
-      super('NucleusAction', actionResourceStructure, { meta: { originEngineID, originEngineName, originProcessID }, name: actionName, originalMessage: actionMessage }, originUserID);
+      if (!!correlationID) actionAttributes.meta.correlationID = correlationID;
+
+      super('NucleusAction', actionResourceStructure, actionAttributes, originUserID);
 
       /** @member {String} name */
       Reflect.defineProperty(this, 'name', { enumerable: true, writable: false });

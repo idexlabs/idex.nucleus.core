@@ -84,6 +84,15 @@ mocha.suite('Nucleus Engine', function () {
   });
 
   mocha.suiteSetup(function () {
+    const $$sandbox = sinon.createSandbox();
+
+    Reflect.defineProperty(this, '$$sandbox', {
+      value: $$sandbox,
+      writable: false
+    });
+  });
+
+  mocha.suiteSetup(function () {
     const { $datastore } = this;
 
     return $datastore.$$server.flushallAsync();
@@ -107,6 +116,12 @@ mocha.suite('Nucleus Engine', function () {
     const { $datastore } = this;
 
     return $datastore.destroy();
+  });
+
+  mocha.suiteTeardown(function () {
+    const { $$sandbox } = this;
+
+    return $$sandbox.reset();
   });
 
   mocha.suite("Parsing template strings", function () {
@@ -474,6 +489,47 @@ mocha.suite('Nucleus Engine', function () {
 
         return $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', { iam: 'special' }, userID)
           .tap(console.log);
+      });
+
+    });
+
+    mocha.suite("Correlation ID", function () {
+
+      mocha.suiteSetup(async function () {
+        const { $datastore } = this;
+        const $handlerDatastore = this.$datastore.duplicateConnection();
+
+        // Manually update the action's item's status and final message.
+        // This will trigger the #publishActionByNameAndHandleResponse to resolve with the response;
+
+        await $handlerDatastore.$$server.subscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
+
+        $handlerDatastore.$$server.on('message', async (channelName, redisCommand) => {
+          if (channelName !== `__keyspace@${DATASTORE_INDEX}__:Dummy` || redisCommand !== 'lpush') return;
+
+          const actionItemKey = await $datastore.$$server.lpopAsync('Dummy');
+
+          await $datastore.addItemToHashFieldByName(actionItemKey, 'finalMessage', { dummy: { ID: uuid.v4() } }, 'status', NucleusAction.CompletedActionStatus);
+
+          await $handlerDatastore.$$server.unsubscribe(`__keyspace@${DATASTORE_INDEX}__:Dummy`);
+        });
+
+        return Promise.delay(1000);
+      });
+
+      mocha.test("Correlation ID are logged for the whole lifecycle of an action when passed as an option of the #publishActionByNameAndHandleResponse method.", async function () {
+        const { $engine, $$sandbox } = this;
+        const $$loggerDebugStub = $$sandbox.stub($engine.$logger, 'debug');
+
+        const correlationID = uuid.v4();
+        const originUserID = uuid.v4();
+
+        await $engine.publishActionByNameAndHandleResponse('ExecuteSimpleDummy', {}, { correlationID, originUserID });
+        await Promise.delay(1000);
+
+        chai.expect($$loggerDebugStub.calledWith(sinon.match.string, sinon.match({
+          correlationID
+        })));
       });
 
     });
