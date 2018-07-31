@@ -34,17 +34,20 @@ class NucleusResourceRelationshipDatastore {
         return Promise.all([
           fsReadFilePromisified(path.join(__dirname, '/lua/registerNodeToAllAncestors.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllAncestorsForNode.lua'), 'UTF8'),
-          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8')
+          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8'),
+          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllUnindexedMemberRelationship.lua'), 'UTF8')
         ]);
       })
-      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript ]) => {
+      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript, retrieveAllUnindexedMemberRelationshipScript ]) => {
 
         return Promise.all([
           this.$datastore.registerScriptByName('RegisterNodeToAllAncestors', registerNodeToAllAncestorsScript),
           this.$datastore.registerScriptByName('RetrieveAllAncestorsForNode', retrieveAllAncestorsForNodeScript),
-          this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript)
+          this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript),
+          this.$datastore.registerScriptByName('RetrieveAllUnindexedMemberRelationship', retrieveAllUnindexedMemberRelationshipScript)
         ]);
-      });
+      })
+      .then(this.reindexMemberRelationships.bind(this));
 
     const $$proxy = new Proxy(this, {
       get: function (object, property) {
@@ -79,6 +82,24 @@ class NucleusResourceRelationshipDatastore {
           return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', 'ResourceRelationship', object);
         }
       });
+  }
+
+  async reindexMemberRelationships () {
+    const { $logger } = this.$datastore;
+
+    const objectToIndexList = await this.$datastore.evaluateLUAScriptByName('RetrieveAllUnindexedMemberRelationship', 'ResourceRelationship');
+
+    if (objectToIndexList.length === 0) return;
+
+    // https://github.com/sebastienfilion/idex.nucleus/issues/11
+    // The way that the relationships are cached changed between 0.5.x and 0.7.x.
+    $logger.debug(`Reindexing ${objectToIndexList.length} old member relationships. https://github.com/sebastienfilion/idex.nucleus/issues/11`);
+
+    return Promise.all(objectToIndexList
+      .map((object) => {
+
+        return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', 'ResourceRelationship', object);
+      }));
   }
 
   /**
