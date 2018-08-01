@@ -109,7 +109,7 @@ mocha.suite("Nucleus Resource API", function () {
 
             if (!ancestorNodeID) return;
 
-            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`Node-${nodeID}`, 'is-member-of', (ancestorNodeID === 'SYSTEM') ? 'SYSTEM' : `Node-${ancestorNodeID}`);
+            $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(`Node-${nodeID}`, $resourceRelationshipDatastore.membershipPredicateName, (ancestorNodeID === 'SYSTEM') ? 'SYSTEM' : `Node-${ancestorNodeID}`);
           }));
       });
 
@@ -381,7 +381,7 @@ mocha.suite("Nucleus Resource API", function () {
             .forEach((key) => {
               const { value } = Reflect.getOwnPropertyDescriptor($store, key);
 
-              if ('restore' in value) value.restore();
+              if (value instanceof Function && 'restore' in value) value.restore();
             });
         });
     });
@@ -427,12 +427,12 @@ mocha.suite("Nucleus Resource API", function () {
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledTwice).to.be.true;
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledWith(
               sinon.match($$nodeTypeNodeIDRegularExpression),
-              'is-member-of',
+              $resourceRelationshipDatastore.membershipPredicateName,
               `Group-${groupID}`
             )).to.be.true;
             chai.expect($$resourceRelationshipDatastoreCreateRelationshipBetweenSubjectAndObject.calledWith(
               sinon.match($$nodeTypeNodeIDRegularExpression),
-              'is-authored-by',
+              $resourceRelationshipDatastore.authorshipPredicateName,
               `User-${authorUserID}`
             )).to.be.true;
           });
@@ -467,8 +467,8 @@ mocha.suite("Nucleus Resource API", function () {
           .then(({ resource, resourceRelationships }) => {
             chai.expect(resource).to.be.an.instanceOf(NucleusResource);
             chai.expect(resource).to.deep.include(dummyAttributes);
-            chai.expect(resourceRelationships['is-authored-by'][0].resourceID).to.equal(authorUserID);
-            chai.expect(resourceRelationships['is-member-of'][0].resourceID).to.equal(groupID);
+            chai.expect(resourceRelationships[$resourceRelationshipDatastore.authorshipPredicateName][0].resourceID).to.equal(authorUserID);
+            chai.expect(resourceRelationships[$resourceRelationshipDatastore.membershipPredicateName][0].resourceID).to.equal(groupID);
           });
       });
 
@@ -483,9 +483,9 @@ mocha.suite("Nucleus Resource API", function () {
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
           .to.eventually.deep.property({
             resourceRelationships: {
-              'is-member-of': [
+              [$resourceRelationshipDatastore.membershipPredicateName]: [
                 {
-                  relationship: 'is-member-of',
+                  relationship: $resourceRelationshipDatastore.membershipPredicateName,
                   resourceID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5'
                 }
               ]
@@ -717,7 +717,7 @@ mocha.suite("Nucleus Resource API", function () {
         const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
         const nodeID = '282c1b2c-0cd4-454f-bf8f-52b450e7aee5';
 
-        return NucleusResourceAPI.retrieveAllNodesByRelationshipWithNodeByID.call({ $datastore, $resourceRelationshipDatastore }, 'Group', nodeID, 'is-member-of', originUserID)
+        return NucleusResourceAPI.retrieveAllNodesByRelationshipWithNodeByID.call({ $datastore, $resourceRelationshipDatastore }, 'Group', nodeID, $resourceRelationshipDatastore.membershipPredicateName, originUserID)
           .then((resourceList) => {
             // The user retrieve 2 dummies and 1 user, itself as part of the group.
             chai.expect(resourceList).to.have.length(4);
@@ -769,12 +769,12 @@ mocha.suite("Nucleus Resource API", function () {
             chai.expect(resourceList).to.have.length(2);
             chai.expect(resourceList).to.have.nested.property('[0].resource.ID', '22d969f8-ef02-4e31-ae5f-24f9e864a390');
             chai.expect(resourceList).to.have.nested.property('[0].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
             chai.expect(resourceList).to.have.nested.property('[1].resource.ID', 'b1947406-cdad-4c5c-9c44-8a544221b318');
             chai.expect(resourceList).to.have.nested.property('[1].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
           });
       });
 
@@ -848,12 +848,12 @@ mocha.suite("Nucleus Resource API", function () {
             chai.expect(resourceList).to.have.length(4);
             chai.expect(resourceList).to.have.nested.property('[0].resource.ID', '22d969f8-ef02-4e31-ae5f-24f9e864a390');
             chai.expect(resourceList).to.have.nested.property('[0].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property('[0].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
             chai.expect(resourceList).to.have.nested.property('[1].resource.ID', 'b1947406-cdad-4c5c-9c44-8a544221b318');
             chai.expect(resourceList).to.have.nested.property('[1].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-authored-by[0].resourceID', 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property('[1].resourceRelationships.is-member-of[0].resourceID', '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
+            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
           });
       });
 
@@ -1036,8 +1036,8 @@ mocha.suite("Nucleus Resource API", function () {
                       chai.expect(resourceList[0]).to.have.property('resource');
                       chai.expect(resourceList[0]).to.have.nested.property('resource.ID');
                       chai.expect(resourceList[0]).to.have.property('resourceRelationships');
-                      chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-authored-by');
-                      chai.expect(resourceList[0]).to.have.nested.property('resourceRelationships.is-member-of');
+                      chai.expect(resourceList[0]).to.have.nested.property(`resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}`);
+                      chai.expect(resourceList[0]).to.have.nested.property(`resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}`);
 
                       console.timeEnd(`Retrieve all (${attemptCount} attempt(s))`);
                     })
@@ -1098,7 +1098,7 @@ function generateHierarchyTree (treeBranchList) {
 
           $resourceRelationshipDatastore.createRelationshipBetweenSubjectAndObject(
             (nucleusValidator.isObject(node)) ? `${nodeType}-${nodeID}` : node,
-            'is-member-of',
+            $resourceRelationshipDatastore.membershipPredicateName,
             (nucleusValidator.isObject(ancestorNode)) ? `${ancestorNodeType}-${ancestorNodeID}` : ancestorNode
           );
         }));

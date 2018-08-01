@@ -17,16 +17,29 @@ class NucleusResourceRelationshipDatastore {
    * the server is connected.
    *
    * @argument {NucleusDatastore} $datastore
+   * @argument {Object} [options]
+   * @argument {String} [options.membershipPredicateName]
+   * @argument {String} [options.resourceRelationshipItemKey]
    *
    * @returns {Proxy}
    */
-  constructor ($datastore = new NucleusDatastore()) {
+  constructor ($datastore = new NucleusDatastore(), options = {}) {
     Reflect.defineProperty(this, '$datastore', {
       configurable: false,
       enumerable: false,
       value: $datastore,
       writable: false
     });
+
+    const {
+      authorshipPredicateName = 'is-authored-by',
+      membershipPredicateName = 'is-member-of',
+      resourceRelationshipItemKey = 'ResourceRelationship'
+    } = options;
+
+    this.authorshipPredicateName = authorshipPredicateName;
+    this.membershipPredicateName = membershipPredicateName;
+    this.resourceRelationshipItemKey = resourceRelationshipItemKey;
 
     this.$$promise = this.$datastore.$$promise
       .then(() => {
@@ -77,11 +90,11 @@ class NucleusResourceRelationshipDatastore {
     if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${subject}"`);
     if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${object}"`);
 
-    return this.$datastore.addTripleToHexastore('ResourceRelationship', subject, predicate, object)
+    return this.$datastore.addTripleToHexastore(this.resourceRelationshipItemKey, subject, predicate, object)
       .then(() => {
-        if (predicate === 'is-member-of') {
+        if (predicate === this.membershipPredicateName) {
 
-          return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', 'ResourceRelationship', object);
+          return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', this.resourceRelationshipItemKey, object);
         }
       });
   }
@@ -89,7 +102,7 @@ class NucleusResourceRelationshipDatastore {
   async reindexMemberRelationships () {
     const { $logger } = this.$datastore;
 
-    const objectToIndexList = await this.$datastore.evaluateLUAScriptByName('RetrieveAllUnindexedMemberRelationship', 'ResourceRelationship');
+    const objectToIndexList = await this.$datastore.evaluateLUAScriptByName('RetrieveAllUnindexedMemberRelationship', this.resourceRelationshipItemKey);
 
     if (objectToIndexList.length === 0) return;
 
@@ -100,7 +113,7 @@ class NucleusResourceRelationshipDatastore {
     return Promise.all(objectToIndexList
       .map((object) => {
 
-        return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', 'ResourceRelationship', object);
+        return this.$datastore.evaluateLUAScriptByName('RegisterNodeToAllAncestors', this.resourceRelationshipItemKey, object);
       }));
   }
 
@@ -121,9 +134,9 @@ class NucleusResourceRelationshipDatastore {
       return this.removeRelationships(stringifiedSubjectNode, predicate, stringifiedObjectNode);
     }
 
-    return this.$datastore.removeTriplesFromHexastore('ResourceRelationship', subject, predicate, object)
+    return this.$datastore.removeTriplesFromHexastore(this.resourceRelationshipItemKey, subject, predicate, object)
       .then(() => {
-        if (predicate === 'is-member-of') {
+        if (predicate === this.membershipPredicateName) {
 
           return this.$datastore.evaluateLUAScriptByName('UnegisterNodeToAllAncestors', object);
         }
@@ -144,11 +157,11 @@ class NucleusResourceRelationshipDatastore {
       return this.removeAllRelationshipsToVector(stringifiedNode);
     }
 
-    const vectorHasMemberRelationship = (await this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`)).length > 0;
+    const vectorHasMemberRelationship = (await this.$datastore.$$server.zrangebylexAsync(this.resourceRelationshipItemKey, `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`)).length > 0;
 
     if (vectorHasMemberRelationship) await this.$datastore.evaluateLUAScriptByName('UnegisterNodeToAllAncestors', vector);
 
-    return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
+    return this.$datastore.removeAllTriplesFromHexastoreByVector(this.resourceRelationshipItemKey, vector);
   }
 
   /**
@@ -168,7 +181,7 @@ class NucleusResourceRelationshipDatastore {
 
     const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
-    return this.$datastore.evaluateLUAScriptByName('RetrieveAllAncestorsForNode', 'ResourceRelationship', stringifiedParsedNodeList)
+    return this.$datastore.evaluateLUAScriptByName('RetrieveAllAncestorsForNode', this.resourceRelationshipItemKey, stringifiedParsedNodeList)
       .then((ancestorNodeListAccumulator) => {
 
         return ancestorNodeListAccumulator
@@ -197,7 +210,7 @@ class NucleusResourceRelationshipDatastore {
 
     const stringifiedParsedNodeList = parseListForLUA(parsedNodeList);
 
-    return this.$datastore.evaluateLUAScriptByName('RetrieveAllChildrenForNode', 'ResourceRelationship', stringifiedParsedNodeList)
+    return this.$datastore.evaluateLUAScriptByName('RetrieveAllChildrenForNode', this.resourceRelationshipItemKey, stringifiedParsedNodeList)
       .then((childrenNodeListAccumulator) => {
 
         return childrenNodeListAccumulator
@@ -230,7 +243,7 @@ class NucleusResourceRelationshipDatastore {
         .map((subject) => {
           const stringifiedAnchorNode = (nucleusValidator.isObject(subject)) ? `${subject.type}-${subject.ID}` : subject;
 
-          return ['zrangebylex', 'ResourceRelationship', `[SPO:${stringifiedAnchorNode}:`, `[SPO:${stringifiedAnchorNode}:\xff`];
+          return ['zrangebylex', this.resourceRelationshipItemKey, `[SPO:${stringifiedAnchorNode}:`, `[SPO:${stringifiedAnchorNode}:\xff`];
         });
 
       return this.$datastore.$$server.multi(rangeByLexicalSearchDatastoreRequestList).execAsync()
@@ -240,7 +253,7 @@ class NucleusResourceRelationshipDatastore {
         });
     }
 
-    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[SPO:${subject}:`, `[SPO:${subject}:\xff`)
+    return this.$datastore.$$server.zrangebylexAsync(this.resourceRelationshipItemKey, `[SPO:${subject}:`, `[SPO:${subject}:\xff`)
       .then(this.parseItem.bind(this));
   }
 
@@ -259,7 +272,7 @@ class NucleusResourceRelationshipDatastore {
       return this.retrieveAllNodesByTypeForAnchorNode(nodeType, stringifiedAnchorNode);
     }
 
-    return this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[OPS:${anchorNode}:is-member-of:${nodeType}-`, `[OPS:${anchorNode}:is-member-of:${nodeType}-\xff`)
+    return this.$datastore.$$server.zrangebylexAsync(this.resourceRelationshipItemKey, `[OPS:${anchorNode}:is-member-of:${nodeType}-`, `[OPS:${anchorNode}:is-member-of:${nodeType}-\xff`)
       .then((itemList = []) => {
 
         return itemList
@@ -289,7 +302,7 @@ class NucleusResourceRelationshipDatastore {
 
     if (!nucleusValidator.isString(subject) || !this.validateVectorFormat(subject)) throw new NucleusError(`The subject must have the form "resource type + resource ID" but got "${subject}"`);
 
-    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'SPO', subject, predicate)
+    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore(this.resourceRelationshipItemKey, 'SPO', subject, predicate)
       .then(this.parseNode.bind(this));
   }
 
@@ -310,7 +323,7 @@ class NucleusResourceRelationshipDatastore {
 
     if (!nucleusValidator.isString(object) || !this.validateVectorFormat(object)) throw new NucleusError(`The object must have the form "resource type + resource ID" but got "${object}"`);
 
-    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'OPS', object, predicate)
+    return this.$datastore.retrieveVectorByIndexSchemeFromHexastore(this.resourceRelationshipItemKey, 'OPS', object, predicate)
       .then(this.parseNode.bind(this));
   }
 

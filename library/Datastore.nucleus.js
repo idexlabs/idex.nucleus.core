@@ -622,8 +622,8 @@ class NucleusDatastore {
    * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
    *
    * @example
-   * async $datastore.addTripleToHexastore('ResourceRelationship', userID, 'isMember', userGroupID);
-   * const relationshipList = async $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationship', 'SOP', userID, userGroupID);
+   * async $datastore.addTripleToHexastore('ResourceRelationships', userID, 'isMember', userGroupID);
+   * const relationshipList = async $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationships', 'SOP', userID, userGroupID);
    *
    * @argument {String} itemName
    * @argument {String} indexingScheme=SPO,SOP,OPS,OSP,PSO,POS
