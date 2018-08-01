@@ -27,8 +27,7 @@ for index, tripple in pairs(trippleList) do
     local splittedTripple = splitTripple(tripple)
     local object = splittedTripple[3]
 
-    local indexList = redis.call('KEYS', 'NodeList:HierarchyTreeDownward:'..object..'*')
-    local indexExist = table.getn(indexList) > 1
+    local indexExist = redis.call('EXISTS', 'NodeList:HierarchyTreeDownward:'..object)
 
     if (not indexExist) then table.insert(objectList, object) end
 end

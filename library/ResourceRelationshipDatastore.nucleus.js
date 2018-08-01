@@ -35,16 +35,18 @@ class NucleusResourceRelationshipDatastore {
           fsReadFilePromisified(path.join(__dirname, '/lua/registerNodeToAllAncestors.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllAncestorsForNode.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8'),
-          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllUnindexedMemberRelationship.lua'), 'UTF8')
+          fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllUnindexedMemberRelationship.lua'), 'UTF8'),
+          fsReadFilePromisified(path.join(__dirname, '/lua/unregisterNodeToAllAncestors.lua'), 'UTF8')
         ]);
       })
-      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript, retrieveAllUnindexedMemberRelationshipScript ]) => {
+      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript, retrieveAllUnindexedMemberRelationshipScript, unregisterNodeToAllAncestorsScript ]) => {
 
         return Promise.all([
           this.$datastore.registerScriptByName('RegisterNodeToAllAncestors', registerNodeToAllAncestorsScript),
           this.$datastore.registerScriptByName('RetrieveAllAncestorsForNode', retrieveAllAncestorsForNodeScript),
           this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript),
-          this.$datastore.registerScriptByName('RetrieveAllUnindexedMemberRelationship', retrieveAllUnindexedMemberRelationshipScript)
+          this.$datastore.registerScriptByName('RetrieveAllUnindexedMemberRelationship', retrieveAllUnindexedMemberRelationshipScript),
+          this.$datastore.registerScriptByName('UnegisterNodeToAllAncestors', unregisterNodeToAllAncestorsScript)
         ]);
       })
       .then(this.reindexMemberRelationships.bind(this));
@@ -119,7 +121,15 @@ class NucleusResourceRelationshipDatastore {
       return this.removeRelationships(stringifiedSubjectNode, predicate, stringifiedObjectNode);
     }
 
-    return this.$datastore.removeTriplesFromHexastore('ResourceRelationship', subject, predicate, object);
+    console.log(`-----> #removeRelationshipBetweenSubjectAndObject`);
+
+    return this.$datastore.removeTriplesFromHexastore('ResourceRelationship', subject, predicate, object)
+      .then(() => {
+        if (predicate === 'is-member-of') {
+
+          return this.$datastore.evaluateLUAScriptByName('UnegisterNodeToAllAncestors', object);
+        }
+      });
   }
 
   /**
@@ -129,12 +139,20 @@ class NucleusResourceRelationshipDatastore {
    *
    * @returns {Promise}
    */
-  removeAllRelationshipsToVector (vector) {
+  async removeAllRelationshipsToVector (vector) {
     if (nucleusValidator.isObject(vector)) {
       const stringifiedNode = `${vector.type}-${vector.ID}`;
 
       return this.removeAllRelationshipsToVector(stringifiedNode);
     }
+
+    const rel = await this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`);
+    console.log(rel);
+    const vectorHasMemberRelationship = (await this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`)).length > 0;
+
+    console.log(`-----> #removeAllRelationshipsToVector ${vectorHasMemberRelationship}`);
+
+    if (vectorHasMemberRelationship) await this.$datastore.evaluateLUAScriptByName('UnegisterNodeToAllAncestors', vector);
 
     return this.$datastore.removeAllTriplesFromHexastoreByVector('ResourceRelationship', vector);
   }
