@@ -531,18 +531,12 @@ class NucleusResourceAPI {
   static async retrieveAllResourcesByTypeForResourceByID (anchorResourceType, anchorResourceID, resourceType, NucleusResourceModel, originUserID) {
     const { $datastore, $resourceRelationshipDatastore } = this;
 
-    console.time(`${anchorResourceID} ${anchorResourceType} ${resourceType} Permission`);
     const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call(this, originUserID, anchorResourceType, anchorResourceID);
-    console.timeEnd(`${anchorResourceID} ${anchorResourceType} ${resourceType} Permission`);
     if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve anything from the ${anchorResourceType} ("${anchorResourceID}")`);
-    console.time(`${anchorResourceID} ${anchorResourceType} ${resourceType} Node`);
 
     const nodeList = await $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode(resourceType, `${anchorResourceType}-${anchorResourceID}`);
-    console.timeEnd(`${anchorResourceID} ${anchorResourceType} ${resourceType} Node`);
-    console.time(`${anchorResourceID} ${anchorResourceType} ${resourceType} Resource`);
 
     const resourceList = await NucleusResourceAPI.extendNodeList.call(this, nodeList, NucleusResourceModel, originUserID);
-    console.timeEnd(`${anchorResourceID} ${anchorResourceType} ${resourceType} Resource`);
 
     return { resourceList };
   }
@@ -810,15 +804,7 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return [];
 
-    // const cachedNodeList = await $datastore.retrieveItemByName(`NodeList:HierarchyTreeDownward:${node.ID}`);
-    //
-    // if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
-
-    return $resourceRelationshipDatastore.retrieveAllChildrenForNode(node)
-      /*.tap((nodeList) => {
-
-        return $datastore.createItem(`NodeList:HierarchyTreeDownward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
-      })*/;
+    return $resourceRelationshipDatastore.retrieveAllChildrenForNode(node);
   }
 
   /**
@@ -834,15 +820,8 @@ class NucleusResourceAPI {
 
     if (!$resourceRelationshipDatastore) return [];
 
-    // const cachedNodeList = await $datastore.retrieveItemByName(`NodeList:HierarchyTreeUpward:${node.ID}`);
-    //
-    // if (!!cachedNodeList) return Promise.resolve(cachedNodeList);
 
-    return $resourceRelationshipDatastore.retrieveAllAncestorsForNode(node)
-      /*.tap((nodeList) => {
-
-        return $datastore.createItem(`NodeList:HierarchyTreeUpward:${node.ID}`, nodeList, HIERARCHY_TREE_CACHE_TTL);
-      })*/;
+    return $resourceRelationshipDatastore.retrieveAllAncestorsForNode(node);
   }
 }
 

@@ -121,8 +121,6 @@ class NucleusResourceRelationshipDatastore {
       return this.removeRelationships(stringifiedSubjectNode, predicate, stringifiedObjectNode);
     }
 
-    console.log(`-----> #removeRelationshipBetweenSubjectAndObject`);
-
     return this.$datastore.removeTriplesFromHexastore('ResourceRelationship', subject, predicate, object)
       .then(() => {
         if (predicate === 'is-member-of') {
@@ -146,11 +144,7 @@ class NucleusResourceRelationshipDatastore {
       return this.removeAllRelationshipsToVector(stringifiedNode);
     }
 
-    const rel = await this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`);
-    console.log(rel);
     const vectorHasMemberRelationship = (await this.$datastore.$$server.zrangebylexAsync('ResourceRelationship', `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`)).length > 0;
-
-    console.log(`-----> #removeAllRelationshipsToVector ${vectorHasMemberRelationship}`);
 
     if (vectorHasMemberRelationship) await this.$datastore.evaluateLUAScriptByName('UnegisterNodeToAllAncestors', vector);
 
