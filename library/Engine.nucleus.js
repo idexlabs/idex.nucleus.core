@@ -429,7 +429,6 @@ class NucleusEngine {
       }, []);
 
     if (!actionSignature.includes('originUserID')) argumentList.push($action.originUserID);
-    if (!actionSignature.includes('correlationID')) argumentList.push($action.meta.correlationID);
 
     const $executionContext = ((contextName === 'Self')) ? this : require(filePath);
 
@@ -602,7 +601,7 @@ end
    * const { dummy } = await $engine.publishActionByNameAndHandleResponse('RetrieveDummyByID', { dummyID }, originUserID);
    *
    * @argument {String} actionName
-   * @argument {Object} actionMessage
+   * @argument {Objec t} actionMessage
    * @argument {String} originUserID
    *
    * @returns {Promise<Object>}
