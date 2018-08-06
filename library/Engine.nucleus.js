@@ -601,7 +601,7 @@ end
    * const { dummy } = await $engine.publishActionByNameAndHandleResponse('RetrieveDummyByID', { dummyID }, originUserID);
    *
    * @argument {String} actionName
-   * @argument {Objec t} actionMessage
+   * @argument {Object} actionMessage
    * @argument {String} originUserID
    *
    * @returns {Promise<Object>}
