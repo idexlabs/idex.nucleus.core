@@ -330,7 +330,7 @@ class NucleusResourceAPI {
     if (!nucleusValidator.isArray(resourceIDList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID list must be an array.");
     if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
 
-    const { $datastore, $logger, $resourceRelationshipDatastore } = this;
+    const { $datastore, $resourceRelationshipDatastore } = this;
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
@@ -357,25 +357,6 @@ class NucleusResourceAPI {
 
     return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
       .then(([resourceList, nodeRelationshipListList]) => {
-        if (resourceList.length !== resourceIDList.length) {
-          const retrievedResourceIDList = resourceList
-            .map(({ ID }) => ID);
-          const missingResourceIDList = resourceIDList
-            .filter((resourceID) => {
-
-              return !retrievedResourceIDList.includes(resourceID);
-            });
-
-          $logger.warn(`${missingResourceIDList.length} requested resource${(missingResourceIDList.length > 1) ? 's' : ''} does not exist. This will throw an error in a future release.`, {
-            missingResourceIDList
-          });
-
-          nodeRelationshipListList = nodeRelationshipListList
-            .filter((nodeRelationshipList) => {
-              
-              return nodeRelationshipList.length > 0;
-            });
-        }
 
         return resourceList
           .reduce((accumulator, resource, index) => {
