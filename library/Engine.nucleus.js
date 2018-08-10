@@ -489,6 +489,7 @@ end
           .reduce((accumulator, argumentName) => {
             if (argumentName === 'options') accumulator.push(argumentName);
             else if (argumentName === 'originUserID') accumulator.push(argumentName);
+            else if (argumentName === 'correlationID') accumulator.push(argumentName);
             else if (actionMessageArgumentList.includes(argumentName)) accumulator.push(argumentName);
 
             return accumulator;
