@@ -434,6 +434,8 @@ class NucleusEngine {
 
     if (nucleusValidator.isEmpty($executionContext[methodName])) throw new NucleusError.UndefinedContextNucleusError(`Could not execute the action ${$action.name} because the handler method could not be retrieved.`);
 
+    const $augmentedLogger = NucleusEngine.augmentLogger(this.$logger, $action);
+
     const actionResponse = await $executionContext[methodName].apply((
       // If the action is part of the current engine, the context of the method to execute will be `this`...
       (contextName === 'Self')) ?
@@ -442,8 +444,8 @@ class NucleusEngine {
       // The local datastore and the local logger or...
       // The local datastore, the local logger and a relationship datastore, if available.
       (this.$resourceRelationshipDatastore) ?
-        {$datastore: this.$datastore, $logger: this.$logger, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore} :
-        {$datastore: this.$datastore, $logger: this.$logger }, argumentList);
+        {$datastore: this.$datastore, $logger: $augmentedLogger, $resourceRelationshipDatastore: this.$resourceRelationshipDatastore} :
+        {$datastore: this.$datastore, $logger: $augmentedLogger }, argumentList);
 
     return actionResponse;
   }
@@ -1033,6 +1035,40 @@ Please make sure that everything is set-up properly. https://github.com/sebastie
     }
 
     return this.$datastore.createItem('RedisConnectionVerified', this.ID, 60 * 60 * 7);
+  }
+
+  /**
+   * Augments a logger with data from an action.
+   *
+   * @argument {Object|Console} $logger
+   * @argument {NucleusAction} $action
+   *
+   * @returns {Object}
+   */
+  static augmentLogger ($logger, $action) {
+    const { ID: actionID, meta: { correlationID }, name: actionName, originUserID } = $action;
+    const loggerLevelNameList = [
+      "error",
+      "warn",
+      "info",
+      "log",
+      "debug",
+      "trace"
+    ];
+    const loggerWrapper = {};
+
+    loggerLevelNameList
+      .reduce((accumulator, loggerLevel) => {
+        accumulator[loggerLevel] = function (message, meta = {}) {
+          meta = Object.assign({}, meta, { correlationID, actionID, actionName, originUserID });
+
+          return $logger[loggerLevel].call($logger, message, meta);
+        };
+
+        return accumulator;
+      }, loggerWrapper);
+
+    return loggerWrapper;
   }
 
   /**
