@@ -315,13 +315,13 @@ class NucleusDatastore {
    *
    * @returns {Promise}
    */
-  executeHandlerCallbackForChannelName (channelName, $event) {
+  async executeHandlerCallbackForChannelName (channelName, $event) {
     const $$handlerCallbackList = this.$$handlerCallbackListByChannelName[channelName];
 
     if (nucleusValidator.isEmpty($$handlerCallbackList)) return Promise.resolve();
 
     if ($$keyspaceNotificationChannelNameRegularExpression.test(channelName)) {
-      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, command: $event });
+      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, command: $event, processID: process.pid });
 
       return Promise.all($$handlerCallbackList
         .map(($$handlerCallback) => {
@@ -329,7 +329,8 @@ class NucleusDatastore {
           return Promise.resolve($$handlerCallback.call(this, channelName, $event));
         }));
     } else {
-      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, eventID: $event.ID, eventName: $event.name });
+      const { meta: { correlationID } } = $event;
+      this.$logger.debug(`Executing ${$$handlerCallbackList.length} handler callback${($$handlerCallbackList.length > 1) ? 's' : ''} for the channel "${channelName}".`, { channelName, correlationID, eventID: $event.ID, eventName: $event.name, processID: process.pid });
 
       return Promise.all($$handlerCallbackList
         .map(($$handlerCallback) => {

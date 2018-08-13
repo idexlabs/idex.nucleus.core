@@ -707,4 +707,134 @@ mocha.suite('Nucleus Engine', function () {
 
   });
 
+  mocha.suite.skip("Multi-instance engine environment", function () {
+
+    mocha.suiteSetup(async function () {
+      const { $$sandbox } = this;
+      const $$multiInstanceEnginePingEngineSpy = $$sandbox.spy();
+
+      class MultiInstanceEngine extends NucleusEngine {
+
+        constructor () {
+          const $actionDatastore = new NucleusDatastore(
+            `MultiInstanceActionDatastore`,
+            {
+              index: DATASTORE_INDEX,
+              port: DATASTORE_PORT,
+              URL: DATASTORE_URL
+            }
+          );
+          const $engineDatastore = new NucleusDatastore(
+            `MultiInstanceEngineDatastore`,
+            {
+              index: DATASTORE_INDEX,
+              port: DATASTORE_PORT,
+              URL: DATASTORE_URL
+            }
+          );
+          const $eventDatastore = new NucleusDatastore(
+            `MultiInstanceEventDatastore`,
+            {
+              index: DATASTORE_INDEX,
+              port: DATASTORE_PORT,
+              URL: DATASTORE_URL
+            }
+          );
+
+          super('MultiInstance', {
+            $actionDatastore,
+            $engineDatastore,
+            $eventDatastore,
+            automaticallyRetrievePendingActions: true
+          });
+
+          this.$$promise = this.$$promise
+            .then(() => {
+
+              this.subscribeAndHandleEventByChannelName('EnginePinged', async ({ message, meta: { correlationID }, originUserID }) => {
+                const $event = new NucleusEvent('ConfirmEnginePing', message, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
+
+                return this.publishEventToChannelByName('ConfirmEnginePing', $event);
+              });
+            });
+
+        }
+
+        pingEngine () {
+          $$multiInstanceEnginePingEngineSpy();
+
+          return Promise.resolve();
+        }
+
+      }
+
+      const $multiInstanceEngine1 = new MultiInstanceEngine();
+      const $multiInstanceEngine2 = new MultiInstanceEngine();
+      const $multiInstanceEngine3 = new MultiInstanceEngine();
+
+      await Promise.all([ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ]);
+
+      await $multiInstanceEngine1.storeActionConfiguration({
+        actionName: 'PingEngine',
+        contextName: 'Self',
+        eventName: 'EnginePinged',
+        methodName: 'pingEngine'
+      });
+
+      Reflect.defineProperty(this, '$$multiInstanceEnginePingEngineSpy', { value: $$multiInstanceEnginePingEngineSpy, writable: true });
+      Reflect.defineProperty(this, 'multiInstanceEngineList', { value: [ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ], writable: true });
+    });
+
+    mocha.suiteTeardown(function () {
+      const { multiInstanceEngineList } = this;
+
+      return Promise.all(multiInstanceEngineList
+        .map(($engine) => {
+
+          return $engine.destroy();
+        }));
+    });
+
+    mocha.test("Action is executed only once.", async function () {
+      const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
+      const $$enginePingedEventSpy = $$sandbox.spy();
+
+      const correlationID = uuid.v4();
+      const originUserID = uuid.v4();
+
+      $dummyEngine.subscribeAndHandleEventByChannelName('EnginePinged', $$enginePingedEventSpy);
+
+      $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
+
+      // To ensure the test is not a fluke, let's just check the result in a few seconds...
+      await Promise.delay(1000 * 2);
+
+      chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(1);
+      chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
+
+      $dummyEngine.unsubscribeFromEventChannelByName('EnginePinged');
+    });
+
+    mocha.test("Action's event handler is executed only once.", async function () {
+      const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
+      const $$enginePingedEventSpy = $$sandbox.spy();
+
+      const correlationID = uuid.v4();
+      const originUserID = uuid.v4();
+
+      $dummyEngine.subscribeAndHandleEventByChannelName('ConfirmEnginePing', $$enginePingedEventSpy);
+
+      $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
+
+      // To ensure the test is not a fluke, let's just check the result in a few seconds...
+      await Promise.delay(1000 * 2);
+
+      chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(2);
+      chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
+
+      $dummyEngine.unsubscribeFromEventChannelByName('ConfirmEnginePing');
+    });
+
+  });
+
 });

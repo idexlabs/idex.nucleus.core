@@ -9,6 +9,7 @@
 const Promise = require('bluebird');
 const childProcess = require('child_process');
 const JSDocParserPath = require.resolve('jsdoc/jsdoc.js');
+const fs = require('fs');
 const mustache = require('mustache');
 const path = require('path');
 const uuid = require('uuid');
@@ -21,6 +22,8 @@ const NucleusResource = require('./Resource.nucleus');
 const NucleusResourceRelationshipDatastore = require('./ResourceRelationshipDatastore.nucleus');
 
 const nucleusValidator = require('./validator.nucleus');
+
+const fsReadFilePromisified = Promise.promisify(fs.readFile);
 
 const ACTION_CONFIGURATION_BY_ACTION_NAME_TABLE_NAME = 'ActionConfigurationByActionName';
 const ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME = 'ActionQueueNameByActionName';
@@ -117,6 +120,14 @@ class NucleusEngine {
       .then(() => { if (automaticallyAutodiscover) return this.autodiscover(this.engineDirectoryPath); })
       .then(() => { if (automaticallyRetrievePendingActions) return this.subscribeToActionQueueUpdate(this.defaultActionQueueName); })
       .then(this.fixDatastoreIssues.bind(this))
+      .then(() => {
+
+        return fsReadFilePromisified(path.join(__dirname, '/lua/handleEventQueuing.lua'), 'UTF8');
+      })
+      .then((handleEventQueuingScript) => {
+
+        return this.$datastore.registerScriptByName('HandleEventQueuing', handleEventQueuingScript);
+      })
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
@@ -277,7 +288,8 @@ class NucleusEngine {
     return Promise.all($datastoreList
       .map(($datastore) => {
 
-        return $datastore.destroy();
+        return $datastore.destroy()
+          .timeout(1000);
       }))
       .then(() => {
         this.$logger.info(`The ${this.name} engine has been destroyed.`);
@@ -292,7 +304,7 @@ class NucleusEngine {
    * @returns {Promise<NucleusAction>}
    */
   async executeAction ($action) {
-    const { ID: actionID, meta: { correlationID }, name: actionName, originalMessage: actionMessage, } = $action;
+    const { ID: actionID, meta: { correlationID = uuid.v4() }, name: actionName, originalMessage: actionMessage, } = $action;
     const actionItemKey = $action.generateOwnItemKey();
 
     try {
@@ -544,15 +556,32 @@ end
    * Subscribes and handles an event given a channel name.
    *
    * @argument {String} channelName
-   * @argument {NucleusEvent} $event
+   * @argument {Function} handlerCallback
    *
    * @returns {Promise<Object>}
    */
-  subscribeAndHandleEventByChannelName (channelName, $event) {
+  subscribeAndHandleEventByChannelName (channelName, handlerCallback) {
+    const { $datastore } = this;
 
     this.$eventSubscriberDatastore.subscribeToChannelName(channelName);
 
-    return this.$eventSubscriberDatastore.handleEventByChannelName(channelName, $event);
+    const wrappedHandlerCallback = async function wrapHandlerCallback ($event) {
+      const { meta: { correlationID } } = $event;
+      const timestamp = Date.now();
+
+      // Keep the event referenced for 5 minutes...
+      const eventTTL = 1000 * 60 * 5;
+      const eventItemKey = (correlationID) ? NucleusResource.generateItemKey($event.type, $event.name, correlationID) : $event.generateOwnItemKey();
+
+      const [ eventIsHandled ] = await $datastore.evaluateLUAScriptByName('HandleEventQueuing', 'HandledEventItemKeyList', timestamp, timestamp + eventTTL, eventItemKey);
+
+      console.log(`== Event ${correlationID} is handled: `, !!eventIsHandled);
+      if (!eventIsHandled) return;
+
+      handlerCallback.call(this, $event);
+    };
+
+    return this.$eventSubscriberDatastore.handleEventByChannelName(channelName, wrappedHandlerCallback);
   }
 
   /**

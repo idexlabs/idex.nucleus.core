@@ -39,6 +39,8 @@ class NucleusEvent extends NucleusResource {
    * @argument {String} eventName
    * @argument {Object} eventMessage
    * @argument {Object} [options]
+   * @argument {String} [options.actionID] - The ID of the action that triggered the event.
+   * @argument {String} [options.correlationID]
    * @argument {String} [options.originEngineID]
    * @argument {String} [options.originEngineName]
    * @argument {String} [options.originProcessID]
