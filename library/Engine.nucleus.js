@@ -103,6 +103,7 @@ class NucleusEngine {
     if (automaticallyManageResourceRelationship) this.$resourceRelationshipDatastore = $resourceRelationshipDatastore;
 
     this.$handlerDatastoreByName = {};
+    this.eventHandlerByChannelName = {};
 
     this.$logger = $logger;
 
@@ -579,9 +580,29 @@ end
    * @returns {Promise<Object>}
    */
   subscribeAndHandleEventByChannelName (channelName, handlerCallback) {
-    this.$eventSubscriberDatastore.subscribeToChannelName(channelName);
+    if (!this.eventHandlerByChannelName.hasOwnProperty(channelName)) {
+      this.eventHandlerByChannelName[channelName] = [];
+      this.$eventSubscriberDatastore.subscribeToChannelName(channelName);
 
-    return this.$eventSubscriberDatastore.handleEventByChannelName(channelName, handlerCallback);
+      this.$eventSubscriberDatastore.handleEventByChannelName(channelName, async ($event) => {
+        const { meta: { correlationID } } = $event;
+        const timestamp = Date.now();
+        // Keep the event referenced for 5 minutes...
+        const eventTTL = 1000 * 60 * 5;
+        const eventItemKey = (correlationID) ? NucleusResource.generateItemKey($event.type, $event.name, correlationID) : $event.generateOwnItemKey();
+        const [ eventWasHandled ] = await this.$engineDatastore.evaluateLUAScriptByName('HandleEventQueuing', 'HandledEventItemKeyList', timestamp, timestamp + eventTTL, eventItemKey);
+
+        if (!!eventWasHandled) return;
+
+        this.eventHandlerByChannelName[channelName]
+          .map((handlerCallback) => {
+
+            return handlerCallback.call(this, $event);
+          });
+      });
+    }
+
+    this.eventHandlerByChannelName[channelName].push(handlerCallback);
   }
 
   /**
