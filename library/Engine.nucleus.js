@@ -130,24 +130,6 @@ class NucleusEngine {
         return this.$datastore.registerScriptByName('HandleEventQueuing', handleEventQueuingScript);
       })
       .then(() => {
-        const { $engineDatastore } = this;
-
-        $eventDatastore.executeHandlerCallbackForChannelName = async function wrappedExecuteHandlerCallbackForChannelName (channelName, $event) {
-          const { meta: { correlationID } } = $event;
-          const timestamp = Date.now();
-
-          // Keep the event referenced for 5 minutes...
-          const eventTTL = 1000 * 60 * 5;
-          const eventItemKey = (correlationID) ? NucleusResource.generateItemKey($event.type, $event.name, correlationID) : $event.generateOwnItemKey();
-
-          const [ eventWasHandled ] = await $engineDatastore.evaluateLUAScriptByName('HandleEventQueuing', 'HandledEventItemKeyList', timestamp, timestamp + eventTTL, eventItemKey);
-
-          if (!!eventWasHandled) return;
-
-          return $eventDatastore.executeHandlerCallbackForChannelName.call($eventDatastore, channelName, $event);
-        };
-      })
-      .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
 
