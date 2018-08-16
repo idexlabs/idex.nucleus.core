@@ -182,6 +182,54 @@ class NucleusResourceAPI {
     }
   }
 
+
+  /**
+   * Expands a list of node into the appropriate resource.
+   *
+   * @argument {Object[]} nodeList
+   * @argument {Function} NucleusResourceModel
+   * @argument {String} originUserID
+   *
+   * @returns {Promise<Object[]>}
+   */
+  static extendNodeList(nodeList = [], NucleusResourceModel, originUserID) {
+    const { $datastore, $resourceRelationshipDatastore } = this;
+
+    const itemDatastoreRequestList = nodeList
+      .map(({ID, type}) => {
+        const itemKey = NucleusResource.generateItemKey(type, ID);
+
+        return ['HGETALL', itemKey];
+      });
+
+    const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
+    // NucleusResourceModel, shouldn't request the origin user ID here...
+      .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+
+    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
+
+    return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
+      .then(([resourceList, nodeRelationshipListList]) => {
+
+        return resourceList
+          .reduce((accumulator, resource, index) => {
+            const nodeRelationshipList = nodeRelationshipListList[index];
+
+            const resourceRelationships = nodeRelationshipList
+              .reduce((accumulator, {predicate: relationship, object: {ID: resourceID, type: resourceType}}) => {
+                if (!(relationship in accumulator)) accumulator[relationship] = [];
+                accumulator[relationship].push({relationship, resourceID, resourceType});
+
+                return accumulator;
+              }, {});
+
+            accumulator.push({resource, resourceRelationships});
+
+            return accumulator;
+          }, []);
+      });
+  }
+
   /**
    * Removes a resource given its name and ID.
    *
@@ -297,87 +345,6 @@ class NucleusResourceAPI {
           }, {});
 
         return { resource: $resource, resourceRelationships };
-      });
-  }
-
-  /**
-   * Retrieves a resource given its ID.
-   *
-   * @Nucleus ActionName RetrieveBatchResourceByIDList
-   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
-   * @Nucleus ExtendableActionName `RetrieveBatch${resourceType}ByIDList`
-   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}IDList` 'originUserID'
-   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
-   *
-   * @argument {String} resourceType
-   * @argument {Function} NucleusResourceModel
-   * @argument {String[]} resourceIDList
-   * @argument {String} originUserID
-   *
-   * @returns {Promise<{ resourceList: Object[] }>}
-   *
-   * @throws Will throw an error if the resource type is not a string.
-   * @throws Will throw an error if the resource model is not an instance of NucleusResource.
-   * @throws Will throw an error if the resource ID is not a string.
-   * @throws Will throw an error if the origin user ID is not a string.
-   * @throws Will throw an error if no datastore is passed.
-   * @throws Will throw an error if the origin user is not authorized to retrieve the resource.
-   * @throws Will throw an error if the resource does not exist.
-   */
-  static retrieveBatchResourceByIDList (resourceType, NucleusResourceModel, resourceIDList, originUserID) {
-    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
-    if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
-    if (!nucleusValidator.isArray(resourceIDList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID list must be an array.");
-    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
-
-    const { $datastore, $resourceRelationshipDatastore } = this;
-
-    if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
-
-    const resourceItemList = resourceIDList
-      .map((resourceID) => {
-
-        return NucleusResource.generateItemKey(resourceType, resourceID);
-      });
-
-    const itemDatastoreRequestList = resourceItemList
-      .map((itemKey) => {
-
-        return ['HGETALL', itemKey];
-      });
-
-    const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
-      .then(itemFields => itemFields.filter(Boolean).map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
-
-    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(resourceIDList
-      .map((resourceID) => {
-
-        return { ID: resourceID, type: resourceType };
-      }));
-
-    return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
-      .then(([resourceList, nodeRelationshipListList]) => {
-
-        return resourceList
-          .reduce((accumulator, resource, index) => {
-            const nodeRelationshipList = nodeRelationshipListList[index];
-
-            const resourceRelationships = nodeRelationshipList
-              .reduce((accumulator, {predicate: relationship, object: {ID: resourceID, type: resourceType}}) => {
-                if (!(relationship in accumulator)) accumulator[relationship] = [];
-                accumulator[relationship].push({relationship, resourceID, resourceType});
-
-                return accumulator;
-              }, {});
-
-            accumulator.push({resource, resourceRelationships});
-
-            return accumulator;
-          }, []);
-      })
-      .then((resourceList) => {
-
-        return { resourceList };
       });
   }
 
@@ -545,30 +512,61 @@ class NucleusResourceAPI {
     return { resourceList };
   }
 
+
   /**
-   * Expands a list of node into the appropriate resource.
+   * Retrieves a resource given its ID.
    *
-   * @argument {Object[]} nodeList
+   * @Nucleus ActionName RetrieveBatchResourceByIDList
+   * @Nucleus ActionAlternativeSignature resourceType NucleusResourceModel resourceID originUserID
+   * @Nucleus ExtendableActionName `RetrieveBatch${resourceType}ByIDList`
+   * @Nucleus ExtendableAlternativeActionSignature 'resourceType' 'NucleusResourceModel' `${Nucleus.shiftFirstLetterToLowerCase(resourceType)}IDList` 'originUserID'
+   * @Nucleus ExtendableActionArgumentDefault resourceType `${resourceType}` NucleusResourceModel Nucleus.generateResourceModelFromResourceStructureByResourceType(`${resourceType}`)
+   *
+   * @argument {String} resourceType
    * @argument {Function} NucleusResourceModel
+   * @argument {String[]} resourceIDList
    * @argument {String} originUserID
    *
-   * @returns {Promise<Object[]>}
+   * @returns {Promise<{ resourceList: Object[] }>}
+   *
+   * @throws Will throw an error if the resource type is not a string.
+   * @throws Will throw an error if the resource model is not an instance of NucleusResource.
+   * @throws Will throw an error if the resource ID is not a string.
+   * @throws Will throw an error if the origin user ID is not a string.
+   * @throws Will throw an error if no datastore is passed.
+   * @throws Will throw an error if the origin user is not authorized to retrieve the resource.
+   * @throws Will throw an error if the resource does not exist.
    */
-  static extendNodeList(nodeList = [], NucleusResourceModel, originUserID) {
+  static retrieveBatchResourceByIDList (resourceType, NucleusResourceModel, resourceIDList, originUserID) {
+    if (!nucleusValidator.isString(resourceType)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource type must be a string.");
+    if (!nucleusValidator.isFunction(NucleusResourceModel)) throw new NucleusError.UnexpectedValueTypeNucleusError("The Nucleus resource model must be an instance of NucleusResource.");
+    if (!nucleusValidator.isArray(resourceIDList)) throw new NucleusError.UnexpectedValueTypeNucleusError("The resource ID list must be an array.");
+    if (!nucleusValidator.isString(originUserID) || nucleusValidator.isEmpty(originUserID)) throw new NucleusError.UnexpectedValueTypeNucleusError("The origin user ID must be a string and can't be undefined.");
+
     const { $datastore, $resourceRelationshipDatastore } = this;
 
-    const itemDatastoreRequestList = nodeList
-      .map(({ID, type}) => {
-        const itemKey = NucleusResource.generateItemKey(type, ID);
+    if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
+
+    const resourceItemList = resourceIDList
+      .map((resourceID) => {
+
+        return NucleusResource.generateItemKey(resourceType, resourceID);
+      });
+
+    const itemDatastoreRequestList = resourceItemList
+      .map((itemKey) => {
 
         return ['HGETALL', itemKey];
       });
 
     const $$itemListPromise = $datastore.$$server.multi(itemDatastoreRequestList).execAsync()
-    // NucleusResourceModel, shouldn't request the origin user ID here...
-      .then(itemFields => itemFields.map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
+      .then(itemFields => itemFields.filter(Boolean).map(NucleusDatastore.parseHashItem).map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID)));
 
-    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
+    const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(resourceIDList
+      .map((resourceID) => {
+
+        return { ID: resourceID, type: resourceType };
+      }));
 
     return Promise.all([$$itemListPromise, $$resourceRelationshipsListPromise])
       .then(([resourceList, nodeRelationshipListList]) => {
@@ -589,6 +587,10 @@ class NucleusResourceAPI {
 
             return accumulator;
           }, []);
+      })
+      .then((resourceList) => {
+
+        return { resourceList };
       });
   }
 
