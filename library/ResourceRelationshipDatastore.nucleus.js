@@ -45,6 +45,7 @@ class NucleusResourceRelationshipDatastore {
       .then(() => {
 
         return Promise.all([
+          fsReadFilePromisified(path.join(__dirname, '/lua/archiveAllRelationshipsToVector.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/registerNodeToAllAncestors.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllAncestorsForNode.lua'), 'UTF8'),
           fsReadFilePromisified(path.join(__dirname, '/lua/retrieveAllChildrenForNode.lua'), 'UTF8'),
@@ -52,9 +53,17 @@ class NucleusResourceRelationshipDatastore {
           fsReadFilePromisified(path.join(__dirname, '/lua/unregisterNodeToAllAncestors.lua'), 'UTF8')
         ]);
       })
-      .then(([ registerNodeToAllAncestorsScript, retrieveAllAncestorsForNodeScript, retrieveAllChildrenForNodeScript, retrieveAllUnindexedMemberRelationshipScript, unregisterNodeToAllAncestorsScript ]) => {
+      .then(([
+        archiveAllRelationshipsToVectorScript,
+        registerNodeToAllAncestorsScript,
+        retrieveAllAncestorsForNodeScript,
+        retrieveAllChildrenForNodeScript,
+        retrieveAllUnindexedMemberRelationshipScript,
+        unregisterNodeToAllAncestorsScript
+      ]) => {
 
         return Promise.all([
+          this.$datastore.registerScriptByName('ArchiveAllRelationshipsToVector', archiveAllRelationshipsToVectorScript),
           this.$datastore.registerScriptByName('RegisterNodeToAllAncestors', registerNodeToAllAncestorsScript),
           this.$datastore.registerScriptByName('RetrieveAllAncestorsForNode', retrieveAllAncestorsForNodeScript),
           this.$datastore.registerScriptByName('RetrieveAllChildrenForNode', retrieveAllChildrenForNodeScript),
@@ -75,6 +84,27 @@ class NucleusResourceRelationshipDatastore {
     });
 
     return $$proxy;
+  }
+
+  /**
+   * Archives all relationship to the vector.
+   *
+   * @argument {String|Node} vector
+   *
+   * @returns {Promise}
+   */
+  async archiveAllRelationshipsToVector (vector) {
+    if (nucleusValidator.isObject(vector)) {
+      const stringifiedNode = `${vector.type}-${vector.ID}`;
+
+      return this.archiveAllRelationshipsToVector(stringifiedNode);
+    }
+
+    const vectorHasMemberRelationship = (await this.$datastore.$$server.zrangebylexAsync(this.resourceRelationshipItemKey, `[POS:is-member-of:${vector}:`, `[POS:is-member-of:${vector}:\xff`)).length > 0;
+
+    if (vectorHasMemberRelationship) throw new NucleusError.UnexpectedValueNucleusError(`The relationships to the vector "${vector}" can't be archived because it has active children. Remove or archive the children before trying again.`);
+
+    return this.$datastore.evaluateLUAScriptByName('ArchiveAllRelationshipsToVector', this.resourceRelationshipItemKey, vector);
   }
 
   /**
@@ -99,6 +129,11 @@ class NucleusResourceRelationshipDatastore {
       });
   }
 
+  /**
+   * Reindex member relationships; converting cache list created in 0.5.x to work in 0.7.x
+   *
+   * @return {Promise}
+   */
   async reindexMemberRelationships () {
     const { $logger } = this.$datastore;
 
