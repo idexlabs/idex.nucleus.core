@@ -305,7 +305,7 @@ class NucleusEngine {
    * @returns {Promise<NucleusAction>}
    */
   async executeAction ($action) {
-    const { ID: actionID, meta: { correlationID = uuid.v4() }, name: actionName, originalMessage: actionMessage, } = $action;
+    const { ID: actionID, meta: { correlationID = uuid.v4(), originUserID = $action.meta.authorUserID }, name: actionName, originalMessage: actionMessage, } = $action;
     const actionItemKey = $action.generateOwnItemKey();
 
     try {
@@ -314,7 +314,7 @@ class NucleusEngine {
 
       if (nucleusValidator.isEmpty(actionConfiguration)) throw new NucleusError.UndefinedContextNucleusError(`Could not retrieve the configuration for action "${actionName}".`, { actionID, actionName });
 
-      this.$logger.info(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName, correlationID });
+      this.$logger.info(`Executing action "${actionName} (${actionID})"...`, { actionID, actionName, correlationID, originUserID });
 
       $action.updateStatus(NucleusAction.ProcessingActionStatus);
       await this.$actionDatastore.addItemToHashFieldByName(actionItemKey, 'meta', $action.meta.toString(), 'status', $action.status);
@@ -356,14 +356,14 @@ class NucleusEngine {
             return extendableActionArgumentDefault;
           }).call(this);
 
-          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), actionSignatureList, argumentConfigurationByArgumentName, parsedExtendableActionArgumentDefault);
+          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID }, parsedExtendableActionArgumentDefault, actionMessage), actionSignatureList, argumentConfigurationByArgumentName, parsedExtendableActionArgumentDefault);
 
-          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
+          return this.executeMethodInContext($action, Object.assign({ originUserID }, parsedExtendableActionArgumentDefault, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
             .then((actionResponse) => {
               if (!extendableEventName) return actionResponse;
 
               const eventName = NucleusEngine.parseTemplateString.call(this, actionToExtendContext, extendableEventName);
-              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
               this.publishEventToChannelByName(eventName, $event);
 
@@ -373,13 +373,13 @@ class NucleusEngine {
           const { argumentConfigurationByArgumentName = {}, actionSignature = [], actionAlternativeSignature, contextName = '',  eventName, filePath = '', methodName = '' } = actionConfiguration;
 
           // Make sure that the message meets one of the proposed signature criteria.
-          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), [ actionSignature, actionAlternativeSignature ], argumentConfigurationByArgumentName);
+          const fulfilledActionSignature = this.fulfilActionSignature($action, Object.assign({ originUserID }, actionMessage), [ actionSignature, actionAlternativeSignature ], argumentConfigurationByArgumentName);
 
-          return this.executeMethodInContext($action, Object.assign({ originUserID: $action.originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
+          return this.executeMethodInContext($action, Object.assign({ originUserID }, actionMessage), fulfilledActionSignature, contextName, filePath, methodName)
             .then((actionResponse) => {
               if (!eventName) return actionResponse;
 
-              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID: $action.originUserID });
+              const $event = new NucleusEvent(eventName, actionResponse, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
               this.publishEventToChannelByName(eventName, $event);
 
@@ -403,13 +403,11 @@ class NucleusEngine {
 
       // await this.publishEventToChannelByName(`Action:${actionID}`, $event);
 
-      this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName, correlationID });
+      this.$logger.debug(`The action "${actionName} (${actionID})" has been successfully executed.`, { actionID, actionName, correlationID, originUserID });
 
       return Promise.resolve($action);
     } catch (error) {
-      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { actionID, actionName, correlationID, error });
-
-      this.$logger.error(error);
+      if (!(error instanceof NucleusError)) error = new NucleusError(`The execution of the action "${actionName}" failed because of an external error: ${error}.`, { actionID, actionName, correlationID, error, originUserID });
 
       $action.updateStatus(NucleusAction.FailedActionStatus);
       $action.updateMessage({ error });
@@ -847,7 +845,19 @@ end
       //   }
       // }
 
-      process.nextTick(this.executeAction.bind(this, $action));
+      process.nextTick(() => {
+        console.log($action);
+        this.executeAction($action)
+          .catch((error) => {
+            this.$logger.error(error.message, {
+              actionID: $action.ID,
+              actionName: $action.name,
+              correlationID: $action.meta.correlationID,
+              originUserID: $action.meta.originUserID,
+              ...error
+            });
+          });
+      });
     } catch (error) {
       this.$logger.warn(`In progress: ${error}`);
     }
