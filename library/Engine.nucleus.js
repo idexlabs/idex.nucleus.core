@@ -128,7 +128,7 @@ class NucleusEngine {
       .then((handleEventQueuingScript) => {
 
         return this.$datastore.registerScriptByName('HandleEventQueuing', handleEventQueuingScript);
-      })x
+      })
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
