@@ -128,7 +128,7 @@ class NucleusEngine {
       .then((handleEventQueuingScript) => {
 
         return this.$datastore.registerScriptByName('HandleEventQueuing', handleEventQueuingScript);
-      })
+      })x
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
@@ -739,9 +739,11 @@ end
         const errorAttributes = actionFinalMessage.error;
         const NucleusErrorType = (Object.keys(NucleusError).includes(errorAttributes.name)) ? NucleusError[errorAttributes.name] : NucleusError;
 
-        if (reject) reject(new NucleusErrorType(errorAttributes.message, {error: errorAttributes}));
+        const error = new NucleusErrorType(errorAttributes.message, {error: errorAttributes});
 
-        return Promise.reject({ actionStatus, error: new NucleusErrorType(errorAttributes.message, {error: errorAttributes}) });
+        if (reject) reject(error);
+
+        return Promise.reject({ actionStatus, error });
       } else (reject || Promise.reject)({ actionStatus });
     }
 
@@ -846,7 +848,6 @@ end
       // }
 
       process.nextTick(() => {
-        console.log($action);
         this.executeAction($action)
           .catch((error) => {
             this.$logger.error(error.message, {
