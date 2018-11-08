@@ -458,7 +458,7 @@ mocha.suite('Nucleus Engine', function () {
 
     mocha.suite("#publishActionByNameAndHandleResponse", function () {
 
-      mocha.suiteSetup(async function () {
+      mocha.setup(async function () {
         const { $datastore } = this;
         const $handlerDatastore = this.$datastore.duplicateConnection();
 
@@ -472,6 +472,7 @@ mocha.suite('Nucleus Engine', function () {
 
           const actionItemKey = await $datastore.$$server.lpopAsync('Dummy');
 
+          console.log(actionItemKey);
           if (/.*ExecuteSimpleDummy.*/.test(actionItemKey)) {
             await $datastore.addItemToHashFieldByName(actionItemKey, 'finalMessage', { dummy: { ID: uuid.v4() } }, 'status', NucleusAction.CompletedActionStatus);
           } else if (/.*ThrowErrorWithMetaData.*/.test(actionItemKey)) {
