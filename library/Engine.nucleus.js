@@ -848,7 +848,6 @@ end
       // }
 
       process.nextTick(() => {
-        console.log($action);
         this.executeAction($action)
           .catch((error) => {
             this.$logger.error(error.message, {

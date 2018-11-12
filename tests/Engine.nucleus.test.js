@@ -472,7 +472,6 @@ mocha.suite('Nucleus Engine', function () {
 
           const actionItemKey = await $datastore.$$server.lpopAsync('Dummy');
 
-          console.log(actionItemKey);
           if (/.*ExecuteSimpleDummy.*/.test(actionItemKey)) {
             await $datastore.addItemToHashFieldByName(actionItemKey, 'finalMessage', { dummy: { ID: uuid.v4() } }, 'status', NucleusAction.CompletedActionStatus);
           } else if (/.*ThrowErrorWithMetaData.*/.test(actionItemKey)) {
