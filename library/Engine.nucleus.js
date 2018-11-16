@@ -289,8 +289,7 @@ class NucleusEngine {
     return Promise.all($datastoreList
       .map(($datastore) => {
 
-        return $datastore.destroy()
-          .timeout(1000);
+        return $datastore.destroy();
       }))
       .then(() => {
         this.$logger.info(`The ${this.name} engine has been destroyed.`);
@@ -831,7 +830,12 @@ end
     try {
       this.$logger.debug(`Retrieving a pending action from action queue "${actionQueueName}"...`, { actionQueueName });
 
+      if ($handlerDatastore.$$server.closing || !$handlerDatastore.$$server.connected) throw new NucleusError.UnexpectedValueNucleusError(`The handler is not connected anymore.`);
+
       const actionItemKey = (await $handlerDatastore.$$server.brpopAsync(actionQueueName, 0))[1];
+
+      // Special command used to tell the handler to stop trying to retrieve pending action.
+      if (actionItemKey === '$$_ForceQuit') return;
 
       const $action = new NucleusAction(await (this.$actionDatastore.retrieveAllItemsFromHashByName(actionItemKey)));
       const { ID: actionID, meta: { correlationID }, name: actionName } = $action;

@@ -242,7 +242,37 @@ class NucleusDatastore {
    */
   destroy () {
 
-    return this.$$server.quitAsync();
+    return this.$$server.quitAsync()
+      .timeout(1000)
+      // Seems like using BRPOP or BLPOP prevents it from being quit properly
+      // See https://github.com/sebastienfilion/idex.nucleus/issues/34
+      .catch(async (error) => {
+        if (error.name === 'TimeoutError') {
+          const blockingItemKey = this.$$server.command_queue.toArray()
+            .reduce((accumulator, { command: commandName, args: [ blockingItemKey ] }) => {
+              if (!!accumulator) return accumulator;
+
+              if (commandName === 'brpop' || commandName === 'blpop') return blockingItemKey;
+            }, undefined);
+
+          // If there is no blocking item key, there's something else blocking the connection and should be reported.
+          if (!blockingItemKey) throw error;
+
+          this.$logger.warn(`The Nucleus Datastore "${this.name}" did not quit as expected. Attempting to kill the client.`);
+
+          const $duplicateDatastore = this.duplicateConnection();
+
+          await $duplicateDatastore;
+
+          // The QUIT command is already in the stack, pushing to the blocked list will release the client allowing
+          // it the complete the execution of the stack.
+          await $duplicateDatastore.$$server.lpushAsync(blockingItemKey, '$$_ForceQuit');
+
+          await $duplicateDatastore.destroy();
+
+          this.$logger.info(`The Nucleus Datastore "${this.name}" was successfully killed.`);
+        } else throw error;
+      });
   }
 
   /**
