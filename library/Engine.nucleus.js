@@ -10,7 +10,6 @@ const Promise = require('bluebird');
 const childProcess = require('child_process');
 const JSDocParserPath = require.resolve('jsdoc/jsdoc.js');
 const fs = require('fs');
-const mustache = require('mustache');
 const path = require('path');
 const uuid = require('uuid');
 

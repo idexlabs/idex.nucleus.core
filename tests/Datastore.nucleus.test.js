@@ -457,7 +457,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemID = uuid.v1();
       const item = itemID;
 
-      chai.expect(() => { $datastore.createItem(undefined, item) }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.createItem(undefined, item); }).to.throw(NucleusError);
     });
 
   });
