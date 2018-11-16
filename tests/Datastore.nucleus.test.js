@@ -66,6 +66,37 @@ mocha.suite("Nucleus Datastore", function () {
     return Promise.resolve();
   });
 
+  mocha.suite("#destroy", function () {
+
+    mocha.test("The client quits.", async function () {
+      const $datastore = new NucleusDatastore('Test', {
+        index: DATASTORE_INDEX,
+        URL: DATASTORE_URL,
+        port: DATASTORE_PORT
+      });
+
+      await $datastore;
+
+      return $datastore.destroy();
+    });
+
+    mocha.test("The client quits.", async function () {
+      const $datastore = new NucleusDatastore('Test', {
+        index: DATASTORE_INDEX,
+        URL: DATASTORE_URL,
+        port: DATASTORE_PORT
+      });
+
+      await $datastore;
+
+      await $datastore.$$server.touchAsync("Hello");
+      $datastore.$$server.brpopAsync("Hello", 0);
+
+      return $datastore.destroy();
+    });
+
+  });
+
   mocha.suite("#collapseObjectToDotNotation", function () {
 
     mocha.test("Collapse object dot notation", function () {
@@ -426,7 +457,7 @@ mocha.suite("Nucleus Datastore", function () {
       const itemID = uuid.v1();
       const item = itemID;
 
-      chai.expect(() => { $datastore.createItem(undefined, item) }).to.throw(NucleusError);
+      chai.expect(() => { $datastore.createItem(undefined, item); }).to.throw(NucleusError);
     });
 
   });
