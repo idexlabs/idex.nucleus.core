@@ -61,7 +61,7 @@ class NucleusDatastore {
     this.$logger = $logger;
 
     this.$$promise = new Promise((resolve, reject) => {
-      if (this.$$server.connectedAsync) resolve();
+      if (this.$$server.connected) resolve();
       else {
         this.$$server.onAsync('connect', resolve);
         this.$$server.onceAsync('error', reject);
@@ -264,9 +264,18 @@ class NucleusDatastore {
 
           await $duplicateDatastore;
 
-          // The QUIT command is already in the stack, pushing to the blocked list will release the client allowing
-          // it the complete the execution of the stack.
-          await $duplicateDatastore.$$server.lpushAsync(blockingItemKey, '$$_ForceQuit');
+          // Use the new connection to push a special message to the blocked client until it's released.
+          await new Promise(resolve => {
+            const $$interval = setInterval(() => {
+              if (!this.$$server.connected) {
+                resolve();
+                clearInterval($$interval);
+              } else {
+                $duplicateDatastore.$$server.lpush(blockingItemKey, '$$_ForceQuit');
+                this.$$server.quit();
+              }
+            }, 500);
+          });
 
           await $duplicateDatastore.destroy();
 
