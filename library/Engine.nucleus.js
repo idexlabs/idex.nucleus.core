@@ -71,9 +71,9 @@ class NucleusEngine {
    */
   constructor (engineName, options = {}) {
     const {
-      $actionDatastore = new NucleusDatastore(),
-      $engineDatastore = new NucleusDatastore(),
-      $eventDatastore = new NucleusDatastore(),
+      $actionDatastore = new NucleusDatastore(`${engineName}ActionDatastore`),
+      $engineDatastore = new NucleusDatastore(`${engineName}EngineDatastore`),
+      $eventDatastore = new NucleusDatastore(`${engineName}EventDatastore`),
       $resourceRelationshipDatastore = new NucleusResourceRelationshipDatastore($engineDatastore),
       $logger = console,
       automaticallyAutodiscover = false,
@@ -97,7 +97,7 @@ class NucleusEngine {
     this.$actionDatastore = $actionDatastore;
     this.$engineDatastore = this.$datastore = $engineDatastore;
     this.$eventDatastore = $eventDatastore;
-    this.$eventSubscriberDatastore = this.$eventDatastore.duplicateConnection();
+    this.$eventSubscriberDatastore = this.$eventDatastore.duplicateConnection(`${this.name}EventSubscriberDatastore`);
 
     if (automaticallyManageResourceRelationship) this.$resourceRelationshipDatastore = $resourceRelationshipDatastore;
 
@@ -655,7 +655,7 @@ end
 
       const actionDatastoreIndex = this.$actionDatastore.index;
       const $actionSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty('ActionSubscriber')) ?
-        this.$handlerDatastoreByName['ActionSubscriber'] : (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection());
+        this.$handlerDatastoreByName['ActionSubscriber'] : (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection(`${this.name}ActionSubscriber`));
 
       await $actionSubscriberDatastore;
 
@@ -824,7 +824,9 @@ end
   async retrievePendingAction (actionQueueName) {
     const $handlerDatastore = (this.$handlerDatastoreByName.hasOwnProperty(`${actionQueueName}Handler`)) ?
       this.$handlerDatastoreByName[`${actionQueueName}Handler`] :
-      (this.$handlerDatastoreByName[`${actionQueueName}Handler`] = this.$actionDatastore.duplicateConnection());
+      (this.$handlerDatastoreByName[`${actionQueueName}Handler`] = this.$actionDatastore.duplicateConnection(`${actionQueueName}Handler`));
+
+    await $handlerDatastore;
 
     try {
       this.$logger.debug(`Retrieving a pending action from action queue "${actionQueueName}"...`, { actionQueueName });
@@ -863,7 +865,11 @@ end
           });
       });
     } catch (error) {
-      this.$logger.warn(`In progress: ${error}`);
+      this.$logger.warn(`Could not retrieve a pending action because of an error: ${error}`, {
+        engineID: this.ID,
+        engineName: this.name,
+        error
+      });
     }
   }
 
@@ -983,13 +989,15 @@ end
    *
    * @returns {Promise<void>}
    */
-  subscribeToActionQueueUpdate (actionQueueName) {
+  async subscribeToActionQueueUpdate (actionQueueName) {
     if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action queue name must be a string.");
 
     const actionDatastoreIndex = this.$actionDatastore.index;
     const $actionQueueSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty(`${actionQueueName}Subscriber`)) ?
       this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] :
-      (this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] = this.$actionDatastore.duplicateConnection());
+      (this.$handlerDatastoreByName[`${actionQueueName}Subscriber`] = this.$actionDatastore.duplicateConnection(`${actionQueueName}Subscriber`));
+
+    await $actionQueueSubscriberDatastore;
 
     try {
       const channelName = `__keyspace@${actionDatastoreIndex}__:${actionQueueName}`;
