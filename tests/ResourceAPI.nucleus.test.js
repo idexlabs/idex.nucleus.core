@@ -969,6 +969,7 @@ mocha.suite("Nucleus Resource API", function () {
       });
 
       mocha.suite("Intermitent update", function () {
+        this.timeout(1000 * 25);
         // Test for an issue reported on a resource becoming "unupdatable" after a few edits.
 
         mocha.test("The resource is updated and retrieved multiple times.", async function () {

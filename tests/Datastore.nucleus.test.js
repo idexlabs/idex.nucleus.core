@@ -67,6 +67,7 @@ mocha.suite("Nucleus Datastore", function () {
   });
 
   mocha.suite("#destroy", function () {
+    this.timeout(1000 * 5);
 
     mocha.test("The client quits.", async function () {
       const $datastore = new NucleusDatastore('Test', {
