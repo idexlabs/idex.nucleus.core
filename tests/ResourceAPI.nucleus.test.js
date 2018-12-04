@@ -3,10 +3,11 @@
 const Promise = require('bluebird');
 const chai = require('chai');
 const chaiAsPromised = require('chai-as-promised');
+const chaiSubset = require('chai-subset');
 const mocha = require('mocha');
 const uuid = require('uuid');
 const sinon = require('sinon');
-
+chai.use(chaiSubset);
 chai.use(chaiAsPromised);
 
 const NucleusDatastore = require('../library/Datastore.nucleus');
@@ -472,7 +473,7 @@ mocha.suite("Nucleus Resource API", function () {
           });
       });
 
-      mocha.test.skip("The dummy resource is created by default in the group of the author user.", function () {
+      mocha.test("The dummy resource is created by default in the group of the author user.", async function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const dummyAttributes = {
@@ -481,7 +482,7 @@ mocha.suite("Nucleus Resource API", function () {
         const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
-          .to.eventually.deep.property({
+          .to.eventually.containSubset({
             resourceRelationships: {
               [$resourceRelationshipDatastore.membershipPredicateName]: [
                 {
@@ -493,7 +494,7 @@ mocha.suite("Nucleus Resource API", function () {
            });
       });
 
-      mocha.test.skip("The resource can reserve its own ID.", function () {
+      mocha.test("The resource can reserve its own ID.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const dummyAttributes = {
@@ -503,7 +504,7 @@ mocha.suite("Nucleus Resource API", function () {
         const authorUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
         return chai.expect(NucleusResourceAPI.createResource.call({ $datastore, $resourceRelationshipDatastore }, resourceType, DummyResourceModel, dummyAttributes, authorUserID))
-          .to.eventually.deep.include({ resource: { ID: dummyAttributes.ID } });
+          .to.eventually.containSubset({ resource: { ID: dummyAttributes.ID } });
       });
 
       mocha.test("Using resource attributes that doesn't validate against the resource model throws an error.", function () {
@@ -857,30 +858,58 @@ mocha.suite("Nucleus Resource API", function () {
           });
       });
 
-      // NOTE: This is failing since 673351ae15dc9b69835c8d03198997c3efe96f95
-      mocha.test.skip("All the dummy resources that exist are retrieved.", function () {
+      mocha.test("All the dummy resources that exist are retrieved.", function () {
         const { $datastore, $resourceRelationshipDatastore } = this;
 
         const originUserID = 'e11918ea-2bd4-4d8f-bf90-2c431076e23c';
 
-        return NucleusResourceAPI.retrieveBatchResourceByIDList.call({ $datastore, $logger: console, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, [
+        return chai.expect(NucleusResourceAPI.retrieveBatchResourceByIDList.call({ $datastore, $logger: console, $resourceRelationshipDatastore }, 'Dummy', DummyResourceModel, [
           '22d969f8-ef02-4e31-ae5f-24f9e864a390',
           // This resource ID doesn't exist.
           '6f06e743-0eab-4715-897a-2f5d9da52e1e',
           'b1947406-cdad-4c5c-9c44-8a544221b318',
           '84247275-311c-4858-9dab-f94c655e2b34',
           '0b585001-5262-4a53-9007-d5cbc287f8ee'
-        ], originUserID)
-          .then(({ resourceList }) => {
-            chai.expect(resourceList).to.have.length(4);
-            chai.expect(resourceList).to.have.nested.property('[0].resource.ID', '22d969f8-ef02-4e31-ae5f-24f9e864a390');
-            chai.expect(resourceList).to.have.nested.property('[0].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property(`[0].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
-            chai.expect(resourceList).to.have.nested.property('[1].resource.ID', 'b1947406-cdad-4c5c-9c44-8a544221b318');
-            chai.expect(resourceList).to.have.nested.property('[1].resource.type', 'Dummy');
-            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.authorshipPredicateName}[0].resourceID`, 'e11918ea-2bd4-4d8f-bf90-2c431076e23c');
-            chai.expect(resourceList).to.have.nested.property(`[1].resourceRelationships.${$resourceRelationshipDatastore.membershipPredicateName}[0].resourceID`, '282c1b2c-0cd4-454f-bf8f-52b450e7aee5');
+        ], originUserID))
+          .to.eventually.containSubset({
+            resourceList: [
+              {
+                resource: {
+                  ID: '22d969f8-ef02-4e31-ae5f-24f9e864a390',
+                  type: 'Dummy'
+                },
+                resourceRelationships: {
+                  [$resourceRelationshipDatastore.authorshipPredicateName]: [
+                    {
+                      resourceID: 'e11918ea-2bd4-4d8f-bf90-2c431076e23c',
+                    }
+                  ],
+                  [$resourceRelationshipDatastore.membershipPredicateName]: [
+                    {
+                      resourceID: '282c1b2c-0cd4-454f-bf8f-52b450e7aee5',
+                    }
+                  ]
+                }
+              },
+              {
+                resource: {
+                  ID: 'b1947406-cdad-4c5c-9c44-8a544221b318',
+                  type: 'Dummy'
+                }
+              },
+              {
+                resource: {
+                  ID: '84247275-311c-4858-9dab-f94c655e2b34',
+                  type: 'Dummy'
+                }
+              },
+              {
+                resource: {
+                  ID: '0b585001-5262-4a53-9007-d5cbc287f8ee',
+                  type: 'Dummy'
+                }
+              }
+            ]
           });
       });
 

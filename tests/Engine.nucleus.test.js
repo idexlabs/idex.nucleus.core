@@ -8,8 +8,8 @@ const mocha = require('mocha');
 const path = require('path');
 const uuid = require('uuid');
 const sinon = require('sinon');
-chai.use(chaiAsPromised);
 chai.use(chaiSubset);
+chai.use(chaiAsPromised);
 
 const NucleusAction = require('../library/Action.nucleus');
 const NucleusDatastore = require('../library/Datastore.nucleus');
