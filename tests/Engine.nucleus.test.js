@@ -514,7 +514,7 @@ mocha.suite('Nucleus Engine', function () {
 
     });
 
-    mocha.suite.skip("Correlation ID", function () {
+    mocha.suite("Correlation ID", function () {
 
       mocha.suiteSetup(async function () {
         const { $datastore } = this;
