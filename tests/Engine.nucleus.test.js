@@ -3,11 +3,13 @@
 const Promise = require('bluebird');
 const chai = require('chai');
 const chaiAsPromised = require('chai-as-promised');
+const chaiSubset = require('chai-subset');
 const mocha = require('mocha');
 const path = require('path');
 const uuid = require('uuid');
 const sinon = require('sinon');
 chai.use(chaiAsPromised);
+chai.use(chaiSubset);
 
 const NucleusAction = require('../library/Action.nucleus');
 const NucleusDatastore = require('../library/Datastore.nucleus');
@@ -556,6 +558,7 @@ mocha.suite('Nucleus Engine', function () {
     });
 
     mocha.suite("Load testing", function () {
+      this.timeout(1000 * 15);
 
       mocha.teardown(function () {
         const { $datastore } = this;
@@ -666,192 +669,195 @@ mocha.suite('Nucleus Engine', function () {
 
     });
 
-  });
+    mocha.suite("Autodiscovery", function () {
 
-  // NOTE: This test oddly fails when run along the others, seems like the datastore connection closes before getting here.
-  mocha.suite.skip("Autodiscovery", function () {
+      mocha.test("Autodiscovery test", async function () {
+        const { $dummyEngine } = this;
 
-    mocha.test("Autodiscovery test", async function () {
-      const { $dummyEngine } = this;
+        const { actionConfigurationList, extendableActionConfigurationList, resourceStructureList } = await $dummyEngine.autodiscover(path.join(__dirname, '/autodiscoveryTestAssets'));
 
-      const { actionConfigurationList, extendableActionConfigurationList, resourceStructureList } = await $dummyEngine.autodiscover(path.join(__dirname, '/autodiscoveryTestAssets'));
+        chai.expect(actionConfigurationList).to.have.lengthOf.above(5);
+        chai.expect(extendableActionConfigurationList).to.have.lengthOf.above(4);
+        chai.expect(resourceStructureList).to.have.length(1);
 
-      chai.expect(actionConfigurationList).to.have.length(5);
-      chai.expect(extendableActionConfigurationList).to.have.length(4);
-      chai.expect(resourceStructureList).to.have.length(1);
+        chai.expect(actionConfigurationList).to.containSubset([
+          {
+            actionName: 'ExecuteSimpleDummy'
+          },
+          {
+            actionName: 'ExecuteSimpleDummyWithArguments',
+            actionSignature: ['AID1', 'AID2']
+          },
+          {
+            actionName: 'ExecuteSimpleDummyWithEvent',
+            eventName: 'SimpleDummyWithEventExecuted'
+          },
+          {
+            actionName: 'ExecuteSimpleDummyWithEvent',
+            eventName: 'SimpleDummyWithEventExecuted'
+          },
+          {
+            actionName: 'ExecuteSimpleDummyWithOptions',
+            actionSignature: ['AID1', 'options', 'originUserID'],
+          },
+          {
+            actionName: 'ExecuteSimpleDummyWithComplexSignature',
+            actionSignature: ['AID1', 'AID2'],
+            actionAlternativeSignature: ['AID1', 'AID3']
+          }
+        ]);
 
-      chai.expect(actionConfigurationList[0]).to.deep.include({
-        actionName: 'ExecuteSimpleDummy'
+        chai.expect(extendableActionConfigurationList).to.containSubset([
+          {
+            actionName: 'CreateResource'
+          },
+          {
+            actionName: 'RemoveResourceByID'
+          },
+          {
+            actionName: 'RetrieveResourceByID'
+          },
+          {
+            actionName: 'UpdateResourceByID'
+          }
+        ]);
+
+        chai.expect(resourceStructureList[0]).to.deep.include({
+          resourceType: 'Dummy'
+        });
       });
 
-      chai.expect(actionConfigurationList[1]).to.deep.include({
-        actionName: 'ExecuteSimpleDummyWithArguments',
-        actionSignature: ['AID1', 'AID2']
-      });
-
-      chai.expect(actionConfigurationList[2]).to.deep.include({
-        actionName: 'ExecuteSimpleDummyWithEvent',
-        eventName: 'SimpleDummyWithEventExecuted'
-      });
-
-      chai.expect(actionConfigurationList[3]).to.deep.include({
-        actionName: 'ExecuteSimpleDummyWithComplexSignature',
-        actionSignature: ['AID1', 'AID2'],
-        actionAlternativeSignature: ['AID1', 'AID3']
-      });
-
-      chai.expect(extendableActionConfigurationList[0]).to.deep.include({
-        actionName: 'CreateResource'
-      });
-
-      chai.expect(extendableActionConfigurationList[1]).to.deep.include({
-        actionName: 'RemoveResourceByID'
-      });
-
-      chai.expect(extendableActionConfigurationList[2]).to.deep.include({
-        actionName: 'RetrieveResourceByID'
-      });
-
-      chai.expect(extendableActionConfigurationList[3]).to.deep.include({
-        actionName: 'UpdateResourceByID'
-      });
-
-      chai.expect(resourceStructureList[0]).to.deep.include({
-        resourceType: 'Dummy'
-      });
-
-      return Promise.resolve()
-        .delay(1000);
     });
 
-  });
+    mocha.suite("Multi-instance engine environment", function () {
+      this.timeout(1000 * 5);
 
-  mocha.suite.skip("Multi-instance engine environment", function () {
+      mocha.suiteSetup(async function () {
+        const { $$sandbox } = this;
+        const $$multiInstanceEnginePingEngineSpy = $$sandbox.spy();
 
-    mocha.suiteSetup(async function () {
-      const { $$sandbox } = this;
-      const $$multiInstanceEnginePingEngineSpy = $$sandbox.spy();
+        class MultiInstanceEngine extends NucleusEngine {
 
-      class MultiInstanceEngine extends NucleusEngine {
+          constructor () {
+            const $actionDatastore = new NucleusDatastore(
+              `MultiInstanceActionDatastore`,
+              {
+                index: DATASTORE_INDEX,
+                port: DATASTORE_PORT,
+                URL: DATASTORE_URL
+              }
+            );
+            const $engineDatastore = new NucleusDatastore(
+              `MultiInstanceEngineDatastore`,
+              {
+                index: DATASTORE_INDEX,
+                port: DATASTORE_PORT,
+                URL: DATASTORE_URL
+              }
+            );
+            const $eventDatastore = new NucleusDatastore(
+              `MultiInstanceEventDatastore`,
+              {
+                index: DATASTORE_INDEX,
+                port: DATASTORE_PORT,
+                URL: DATASTORE_URL
+              }
+            );
 
-        constructor () {
-          const $actionDatastore = new NucleusDatastore(
-            `MultiInstanceActionDatastore`,
-            {
-              index: DATASTORE_INDEX,
-              port: DATASTORE_PORT,
-              URL: DATASTORE_URL
-            }
-          );
-          const $engineDatastore = new NucleusDatastore(
-            `MultiInstanceEngineDatastore`,
-            {
-              index: DATASTORE_INDEX,
-              port: DATASTORE_PORT,
-              URL: DATASTORE_URL
-            }
-          );
-          const $eventDatastore = new NucleusDatastore(
-            `MultiInstanceEventDatastore`,
-            {
-              index: DATASTORE_INDEX,
-              port: DATASTORE_PORT,
-              URL: DATASTORE_URL
-            }
-          );
-
-          super('MultiInstance', {
-            $actionDatastore,
-            $engineDatastore,
-            $eventDatastore,
-            automaticallyRetrievePendingActions: true
-          });
-
-          this.$$promise = this.$$promise
-            .then(() => {
-
-              this.subscribeAndHandleEventByChannelName('EnginePinged', async ({ message, meta: { correlationID }, originUserID }) => {
-                const $event = new NucleusEvent('ConfirmEnginePing', message, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
-
-                return this.publishEventToChannelByName('ConfirmEnginePing', $event);
-              });
+            super('MultiInstance', {
+              $actionDatastore,
+              $engineDatastore,
+              $eventDatastore,
+              automaticallyRetrievePendingActions: true
             });
 
+            this.$$promise = this.$$promise
+              .then(() => {
+
+                this.subscribeAndHandleEventByChannelName('EnginePinged', async ({ message, meta: { correlationID }, originUserID }) => {
+                  const $event = new NucleusEvent('ConfirmEnginePing', message, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
+
+                  return this.publishEventToChannelByName('ConfirmEnginePing', $event);
+                });
+              });
+
+          }
+
+          pingEngine () {
+            $$multiInstanceEnginePingEngineSpy();
+
+            return Promise.resolve();
+          }
+
         }
 
-        pingEngine () {
-          $$multiInstanceEnginePingEngineSpy();
+        const $multiInstanceEngine1 = new MultiInstanceEngine();
+        const $multiInstanceEngine2 = new MultiInstanceEngine();
+        const $multiInstanceEngine3 = new MultiInstanceEngine();
 
-          return Promise.resolve();
-        }
+        await Promise.all([ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ]);
 
-      }
+        await $multiInstanceEngine1.storeActionConfiguration({
+          actionName: 'PingEngine',
+          contextName: 'Self',
+          eventName: 'EnginePinged',
+          methodName: 'pingEngine'
+        });
 
-      const $multiInstanceEngine1 = new MultiInstanceEngine();
-      const $multiInstanceEngine2 = new MultiInstanceEngine();
-      const $multiInstanceEngine3 = new MultiInstanceEngine();
-
-      await Promise.all([ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ]);
-
-      await $multiInstanceEngine1.storeActionConfiguration({
-        actionName: 'PingEngine',
-        contextName: 'Self',
-        eventName: 'EnginePinged',
-        methodName: 'pingEngine'
+        Reflect.defineProperty(this, '$$multiInstanceEnginePingEngineSpy', { value: $$multiInstanceEnginePingEngineSpy, writable: true });
+        Reflect.defineProperty(this, 'multiInstanceEngineList', { value: [ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ], writable: true });
       });
 
-      Reflect.defineProperty(this, '$$multiInstanceEnginePingEngineSpy', { value: $$multiInstanceEnginePingEngineSpy, writable: true });
-      Reflect.defineProperty(this, 'multiInstanceEngineList', { value: [ $multiInstanceEngine1, $multiInstanceEngine2, $multiInstanceEngine3 ], writable: true });
-    });
+      mocha.suiteTeardown(function () {
+        const { multiInstanceEngineList } = this;
 
-    mocha.suiteTeardown(function () {
-      const { multiInstanceEngineList } = this;
+        return Promise.all(multiInstanceEngineList
+          .map(($engine) => {
 
-      return Promise.all(multiInstanceEngineList
-        .map(($engine) => {
+            return $engine.destroy();
+          }));
+      });
 
-          return $engine.destroy();
-        }));
-    });
+      mocha.test("Action is executed only once.", async function () {
+        const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
+        const $$enginePingedEventSpy = $$sandbox.spy();
 
-    mocha.test("Action is executed only once.", async function () {
-      const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
-      const $$enginePingedEventSpy = $$sandbox.spy();
+        const correlationID = uuid.v4();
+        const originUserID = uuid.v4();
 
-      const correlationID = uuid.v4();
-      const originUserID = uuid.v4();
+        $dummyEngine.subscribeAndHandleEventByChannelName('EnginePinged', $$enginePingedEventSpy);
 
-      $dummyEngine.subscribeAndHandleEventByChannelName('EnginePinged', $$enginePingedEventSpy);
+        $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
 
-      $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
+        // To ensure the test is not a fluke, let's just check the result in a few seconds...
+        await Promise.delay(1000 * 2);
 
-      // To ensure the test is not a fluke, let's just check the result in a few seconds...
-      await Promise.delay(1000 * 2);
+        chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(1);
+        chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
 
-      chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(1);
-      chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
+        $dummyEngine.unsubscribeFromEventChannelByName('EnginePinged');
+      });
 
-      $dummyEngine.unsubscribeFromEventChannelByName('EnginePinged');
-    });
+      mocha.test("Action's event handler is executed only once.", async function () {
+        const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
+        const $$enginePingedEventSpy = $$sandbox.spy();
 
-    mocha.test("Action's event handler is executed only once.", async function () {
-      const { $dummyEngine, $$multiInstanceEnginePingEngineSpy, $$sandbox } = this;
-      const $$enginePingedEventSpy = $$sandbox.spy();
+        const correlationID = uuid.v4();
+        const originUserID = uuid.v4();
 
-      const correlationID = uuid.v4();
-      const originUserID = uuid.v4();
+        $dummyEngine.subscribeAndHandleEventByChannelName('ConfirmEnginePing', $$enginePingedEventSpy);
 
-      $dummyEngine.subscribeAndHandleEventByChannelName('ConfirmEnginePing', $$enginePingedEventSpy);
+        $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
 
-      $dummyEngine.publishActionByNameAndHandleResponse('PingEngine', {}, { correlationID, originUserID });
+        // To ensure the test is not a fluke, let's just check the result in a few seconds...
+        await Promise.delay(1000 * 2);
 
-      // To ensure the test is not a fluke, let's just check the result in a few seconds...
-      await Promise.delay(1000 * 2);
+        chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(2);
+        chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
 
-      chai.expect($$multiInstanceEnginePingEngineSpy.callCount).to.equal(2);
-      chai.expect($$enginePingedEventSpy.callCount).to.equal(1);
+        $dummyEngine.unsubscribeFromEventChannelByName('ConfirmEnginePing');
+      });
 
-      $dummyEngine.unsubscribeFromEventChannelByName('ConfirmEnginePing');
     });
 
   });

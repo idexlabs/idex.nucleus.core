@@ -26,6 +26,7 @@
   "devDependencies": {
     "chai": "latest",
     "chai-as-promised": "^7.1.1",
+    "chai-subset": "^1.6.0",
     "eslint": "latest",
     "express": "^4.16.3",
     "mocha": "latest",
