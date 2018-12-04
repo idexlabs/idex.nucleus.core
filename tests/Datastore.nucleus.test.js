@@ -349,11 +349,12 @@ mocha.suite("Nucleus Datastore", function () {
         })
         .then(NucleusDatastore.parseItem)
         .then((result) => {
+          chai.expect(result).to.be.a('number');
           chai.expect(result).to.equal(item);
         });
     });
 
-    mocha.test.skip("A list of item is correctly added to the (Redis) list.", function () {
+    mocha.test("A list of item is correctly added to the (Redis) list.", function () {
       const { $datastore, $$redisTestClient } = this;
 
       const itemName = 'Item';
@@ -369,7 +370,7 @@ mocha.suite("Nucleus Datastore", function () {
           return Promise.promisify($$redisTestClient.lrange, { context:$$redisTestClient })(itemName, 0, -1);
         })
         .then((itemIDList) => {
-          chai.expect(itemIDList).to.equal('array');
+          chai.expect(itemIDList).to.be.an('array');
           chai.expect(itemIDList).to.have.length(5);
         });
     });

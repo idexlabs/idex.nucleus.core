@@ -137,22 +137,21 @@ class NucleusDatastore {
    * Adds an item to a list given its key. `LPUSH key value`
    *
    * @argument {String} itemKey
-   * @argument {*} item
-   * @argument {Array} [itemList]
+   * @argument {*|*[]} [itemList]
    *
    * @returns {Promise<*>}
    *
    * @throws Will throw an error if the item key is missing or an empty string.
    */
-  addItemToListByName (itemKey, item) {
+  addItemToListByName (itemKey, itemList) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
 
-    if (nucleusValidator.isArray(item)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item should not be an array.");
+    if (!nucleusValidator.isArray(itemList)) itemList = [itemList];
 
-    const stringifiedItem = NucleusDatastore.stringifyItem(item);
+    const stringifiedItemList = itemList.map(NucleusDatastore.stringifyItem);
 
-    return this.$$server.lpushAsync(itemKey, stringifiedItem)
-      .return(item);
+    return this.$$server.lpushAsync.apply(this.$$server, [itemKey].concat(stringifiedItemList))
+      .return(arguments[0]);
   }
 
   /**
