@@ -649,7 +649,7 @@ end
    *
    * @returns {Promise<Object>}
    */
-  async publishActionByNameAndHandleResponse (actionName, actionMessage = {}, options = {}) {
+  publishActionByNameAndHandleResponse (actionName, actionMessage = {}, options = {}) {
     const originUserID = (nucleusValidator.isObject(options)) ? options.originUserID : options;
     const correlationID = (nucleusValidator.isObject(options)) ? options.correlationID : undefined;
     
@@ -657,38 +657,40 @@ end
     if (!nucleusValidator.isObject(actionMessage)) throw new NucleusError.UnexpectedValueTypeNucleusError("The action message must be an object.");
     if (!originUserID) throw new NucleusError.UndefinedValueNucleusError("The origin user ID must be defined.");
 
-    const actionQueueName = await this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName);
-    if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError(`Could not executed the action "${actionName}" because it wasn't registered properly.`);
+    return this.$actionDatastore.retrieveItemFromHashFieldByName(ACTION_QUEUE_NAME_BY_ACTION_NAME_ITEM_NAME_TABLE_NAME, actionName)
+      .then((actionQueueName) => {
+        if (!nucleusValidator.isString(actionQueueName)) throw new NucleusError.UnexpectedValueTypeNucleusError(`Could not executed the action "${actionName}" because it wasn't registered properly.`);
 
-    const $action = new NucleusAction(actionName, actionMessage, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
+        const $action = new NucleusAction(actionName, actionMessage, { correlationID, originEngineID: this.ID, originEngineName: this.name, originProcessID: process.pid, originUserID });
 
-    const $$actionResponsePromise = new Promise(async (resolve, reject) => {
-      const actionItemKey = $action.generateOwnItemKey();
+        const $$actionResponsePromise = new Promise(async (resolve, reject) => {
+          const actionItemKey = $action.generateOwnItemKey();
 
-      const actionDatastoreIndex = this.$actionDatastore.index;
-      const $actionSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty('ActionSubscriber')) ?
-        this.$handlerDatastoreByName['ActionSubscriber'] : (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection(`${this.name}ActionSubscriber`));
+          const actionDatastoreIndex = this.$actionDatastore.index;
+          const $actionSubscriberDatastore = (this.$handlerDatastoreByName.hasOwnProperty('ActionSubscriber')) ?
+            this.$handlerDatastoreByName['ActionSubscriber'] : (this.$handlerDatastoreByName['ActionSubscriber'] = this.$actionDatastore.duplicateConnection(`${this.name}ActionSubscriber`));
 
-      await $actionSubscriberDatastore;
+          await $actionSubscriberDatastore;
 
-      const channelName = `__keyspace@${actionDatastoreIndex}__:${actionItemKey}`;
+          const channelName = `__keyspace@${actionDatastoreIndex}__:${actionItemKey}`;
 
-      $actionSubscriberDatastore.handleEventByChannelName(channelName, this.handleActionChannelRedisEvent.bind(this, $actionSubscriberDatastore, resolve, reject));
+          $actionSubscriberDatastore.handleEventByChannelName(channelName, this.handleActionChannelRedisEvent.bind(this, $actionSubscriberDatastore, resolve, reject));
 
-      await $actionSubscriberDatastore.subscribeToChannelName(channelName);
+          await $actionSubscriberDatastore.subscribeToChannelName(channelName);
 
-      if (!actionName) throw new NucleusError.UndefinedContextNucleusError(`Can't publish action "${actionName}" because the action queue couldn't be retrieved.`);
+          if (!actionName) throw new NucleusError.UndefinedContextNucleusError(`Can't publish action "${actionName}" because the action queue couldn't be retrieved.`);
 
-      try {
+          try {
 
-        process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
-      } catch (error) {
+            process.nextTick(this.publishActionToQueueByName.bind(this, actionQueueName, $action));
+          } catch (error) {
 
-        reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
-      }
-    });
+            reject(new NucleusError(`Could not publish the action because of an external error: ${error}`, { error }));
+          }
+        });
 
-    return Promise.resolve($$actionResponsePromise);
+        return $$actionResponsePromise;
+      });
   }
 
   /**

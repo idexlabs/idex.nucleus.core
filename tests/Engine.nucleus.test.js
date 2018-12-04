@@ -504,7 +504,7 @@ mocha.suite('Nucleus Engine', function () {
         }
       });
 
-      mocha.test.skip("The response promise can be used like a bluebird promise.", function () {
+      mocha.test("The response promise can be used like a bluebird promise.", function () {
         const { $engine } = this;
         const userID = uuid.v4();
 
