@@ -53,24 +53,22 @@ class NucleusResourceAPI {
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
     if (nucleusValidator.isEmpty($resourceRelationshipDatastore)) throw new NucleusError.UndefinedContextNucleusError("No Resource Relationship datastore is provided.");
 
-    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
-    const { canUpdateResource } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
+    const { canUpdateResourceByTypeAndID } = await NucleusResourceAPI.verifyThatUserCanUpdateResource.call(this, originUserID, resourceType, resourceID);
 
-    if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to archive the ${resourceType} ("${resourceID}")`);
+    if (!canUpdateResourceByTypeAndID) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to archive the ${resourceType} ("${resourceID}")`);
 
     return Promise.all([
-      $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
+      $datastore.retrieveResourceByTypeAndID(resourceType, resourceID),
       $resourceRelationshipDatastore.archiveAllRelationshipsToVector({ ID: resourceID, type: resourceType })
     ])
       .then(([ resourceAttributes ]) => {
         resourceAttributes.meta.archivedISOTime = new Date().toISOString();
 
-        return $datastore.addItemToHashFieldByName(resourceItemKey, resourceAttributes);
+        return $datastore.updateResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
       })
       .return({ resourceID });
   }
@@ -102,9 +100,7 @@ class NucleusResourceAPI {
 
     const { $datastore, $resourceRelationshipDatastore } = this;
 
-    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
@@ -188,17 +184,12 @@ class NucleusResourceAPI {
         Reflect.deleteProperty(resourceAttributes, 'ID');
         Reflect.deleteProperty(resourceAttributes, 'meta');
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID, reservedResourceID);
-        const resourceItemKey = $resource.generateOwnItemKey();
 
-        const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+        const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, $resource.ID);
 
         if (resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${$resource.ID}") already exists.`);
 
-        return Promise.all([
-          $datastore.addItemToHashFieldByName(resourceItemKey, $resource),
-          // This doesn't seem to be used anywhere and should be removed.
-          $datastore.addItemToSetByName(RESOURCE_ID_BY_TYPE_TABLE_NAME, resourceType, $resource.ID),
-        ])
+        return $datastore.createResourceByTypeAndID(resourceType, $resource.ID, $resource)
           .then(() => {
             if (!$resourceRelationshipDatastore) return;
 
@@ -248,22 +239,18 @@ class NucleusResourceAPI {
    *
    * @returns {Promise<Object[]>}
    */
-  static extendNodeList(nodeList = [], NucleusResourceModel, originUserID) {
+  static extendNodeList(resourceType, resourceIDList = [], NucleusResourceModel, originUserID) {
     const { $datastore, $resourceRelationshipDatastore } = this;
 
-    const itemKeyList = nodeList
-      .map(({ID, type}) => {
-        const itemKey = NucleusResource.generateItemKey(type, ID);
-
-        return itemKey;
-      });
-
-    const $$itemListPromise = $datastore.retrieveBatchItemByName(itemKeyList)
+    const $$itemListPromise = $datastore.retrieveBatchResourceByTypeAndIDList(resourceType, resourceIDList)
       .then((resourceAttributesList) => {
 
         return resourceAttributesList
           .map(resourceAttributes => new NucleusResourceModel(resourceAttributes, originUserID));
       });
+
+    const nodeList = resourceIDList
+      .map((resourceID) => ({ ID: resourceID, type: resourceType }));
 
     const $$resourceRelationshipsListPromise = $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject(nodeList);
 
@@ -321,9 +308,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
@@ -332,7 +317,7 @@ class NucleusResourceAPI {
     if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to remove the ${resourceType} ("${resourceID}")`);
 
     return Promise.all([
-      $datastore.removeItemByName(resourceItemKey),
+      $datastore.removeResourceByTypeAndID(resourceType, resourceID),
     ])
       .then(() => {
         if (!$resourceRelationshipDatastore) return;
@@ -378,7 +363,7 @@ class NucleusResourceAPI {
 
     const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
 
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
@@ -387,7 +372,7 @@ class NucleusResourceAPI {
     if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve the ${resourceType} ("${resourceID}")`);
 
     return Promise.all([
-      $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
+      $datastore.retrieveResourceByTypeAndID(resourceType, resourceID),
       $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
         ID: resourceID,
         type: resourceType
@@ -422,6 +407,8 @@ class NucleusResourceAPI {
 
     const { $resourceRelationshipDatastore } = this;
     const anchorNodeIsList = [];
+
+    if (!$resourceRelationshipDatastore) return [];
 
     switch (walkHierarchyTreeMethod) {
       case 'TopNodeDescent':
@@ -538,8 +525,13 @@ class NucleusResourceAPI {
 
     return NucleusResourceAPI.retrieveAllNodesByType.call(this, resourceType, originUserID, walkHierarchyTreeMethod)
       .then((nodeList) => {
+        const resourceIDList = nodeList
+          .map(({ ID }) => {
 
-        return NucleusResourceAPI.extendNodeList.call({ $datastore, $resourceRelationshipDatastore }, nodeList, NucleusResourceModel, originUserID);
+            return ID;
+          });
+
+        return NucleusResourceAPI.extendNodeList.call({ $datastore, $resourceRelationshipDatastore }, resourceType, resourceIDList, NucleusResourceModel, originUserID);
       })
       .then((resourceList) => {
 
@@ -559,14 +551,22 @@ class NucleusResourceAPI {
    * @returns {Promise<{resourceList: Object[] }>}
    */
   static async retrieveAllResourcesByTypeForResourceByID (anchorResourceType, anchorResourceID, resourceType, NucleusResourceModel, originUserID) {
-    const { $datastore, $resourceRelationshipDatastore } = this;
+    const { $resourceRelationshipDatastore } = this;
+
+    if (!$resourceRelationshipDatastore) return { resourceList: [] };
 
     const { canRetrieveResource } = await NucleusResourceAPI.verifyThatUserCanRetrieveResource.call(this, originUserID, anchorResourceType, anchorResourceID);
     if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve anything from the ${anchorResourceType} ("${anchorResourceID}")`);
 
     const nodeList = await $resourceRelationshipDatastore.retrieveAllNodesByTypeForAnchorNode(resourceType, `${anchorResourceType}-${anchorResourceID}`);
 
-    const resourceList = await NucleusResourceAPI.extendNodeList.call(this, nodeList, NucleusResourceModel, originUserID);
+    const resourceIDList = nodeList
+      .map(({ ID }) => {
+
+        return ID;
+      });
+
+    const resourceList = await NucleusResourceAPI.extendNodeList.call(this, resourceType, resourceIDList, NucleusResourceModel, originUserID);
 
     return { resourceList };
   }
@@ -606,14 +606,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const itemKeyList = resourceIDList
-      .map((resourceID) => {
-        const itemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-        return itemKey;
-      });
-
-    const $$itemListPromise = $datastore.retrieveBatchItemByName(itemKeyList)
+    const $$itemListPromise = $datastore.retrieveBatchResourceByTypeAndIDList(resourceType, resourceIDList)
       .then((resourceAttributesList) => {
 
         return resourceAttributesList
@@ -679,9 +672,7 @@ class NucleusResourceAPI {
 
     const { $datastore, $resourceRelationshipDatastore } = this;
 
-    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
@@ -738,9 +729,7 @@ class NucleusResourceAPI {
 
     if (nucleusValidator.isEmpty($datastore)) throw new NucleusError.UndefinedContextNucleusError("No datastore is provided.");
 
-    const resourceItemKey = NucleusResource.generateItemKey(resourceType, resourceID);
-
-    const resourceExists = await $datastore.verifyThatItemByNameExist(resourceItemKey);
+    const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
 
     if (!resourceExists) throw new NucleusError.UndefinedContextNucleusError(`The ${resourceType} ("${resourceID}") does not exist.`);
 
@@ -749,7 +738,7 @@ class NucleusResourceAPI {
     if (!canUpdateResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to update the ${resourceType} ("${resourceID}")`);
 
     return Promise.all([
-      $datastore.retrieveAllItemsFromHashByName(resourceItemKey),
+      $datastore.retrieveResourceByTypeAndID(resourceType, resourceID),
       $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
         ID: resourceID,
         type: resourceType
@@ -766,7 +755,7 @@ class NucleusResourceAPI {
 
         $resource.meta.updatedISOTime = new Date().toISOString();
 
-        await $datastore.addItemToHashFieldByName(resourceItemKey, Object.assign({}, { meta: $resource.meta }, resourceAttributes));
+        await $datastore.updateResourceByTypeAndID(resourceType, resourceID, Object.assign({}, { meta: $resource.meta }, resourceAttributes));
 
         const resourceRelationships = nodeRelationshipList
           .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
@@ -825,7 +814,7 @@ class NucleusResourceAPI {
    * @argument userID
    * @argument resourceID
    *
-   * @returns {Promise<{ canUpdateResource: Boolean }>}
+   * @returns {Promise<{ canUpdateResource: Boolean }>} - Response contains `canUpdateResource` for legacy purposes.
    */
   static async verifyThatUserCanUpdateResource (userID, resourceType, resourceID) {
     const { $resourceRelationshipDatastore } = this;
@@ -864,7 +853,7 @@ class NucleusResourceAPI {
    * @returns {Promise<String[]>}
    */
   static async walkHierarchyTreeDownward (node, depth = Infinity) {
-    const { $datastore, $resourceRelationshipDatastore } = this;
+    const { $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return [];
 
@@ -880,7 +869,7 @@ class NucleusResourceAPI {
    * @returns {Promise<Node[]>}
    */
   static async walkHierarchyTreeUpward (node, depth = Infinity) {
-    const { $datastore, $resourceRelationshipDatastore } = this;
+    const { $resourceRelationshipDatastore } = this;
 
     if (!$resourceRelationshipDatastore) return [];
 

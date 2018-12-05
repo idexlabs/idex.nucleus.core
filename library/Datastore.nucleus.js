@@ -237,6 +237,40 @@ class NucleusDatastore {
   }
 
   /**
+   * Creates a resource given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resourceAttributes = {
+   *   meta: {
+   *     createdISOTime: '2018-09-30T21:27:34.156Z'
+   *   },
+   *   fullName: 'John Doe'
+   * };
+   * const resource = await $datastore.createResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
+   *
+   * resource.ID === resourceID;
+   * resource.type === resourceType;
+   * resource.fullName === resourceAttributes.fullName;
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   * @argument {Object} resourceAttributes
+   * @argument {Number} [TTL] - Time to expire the resource in seconds.
+   *
+   * @returns {Object} - The resource object including the `ID` and `type` attributes.
+   */
+  async createResourceByTypeAndID (resourceType, resourceID, resourceAttributes, TTL) {
+    if (!resourceAttributes.hasOwnProperty('ID')) resourceAttributes.ID = resourceID;
+    if (!resourceAttributes.hasOwnProperty('type')) resourceAttributes.type = resourceType;
+
+    await this.addItemToHashFieldByName(`${resourceType}:${resourceID}`, resourceAttributes);
+    if (TTL) await this.$$server.expireAsync(`${resourceType}:${resourceID}`, TTL);
+
+    return resourceAttributes;
+  }
+
+  /**
    * Destroys the Redis connection.
    *
    * @returns {Promise}
@@ -547,6 +581,24 @@ class NucleusDatastore {
   }
 
   /**
+   * Removes a resource given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * await $datastore.removeResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   *
+   * @returns {Object} - The resource object including the `ID` and `type` attributes.
+   */
+  removeResourceByTypeAndID (resourceType, resourceID) {
+
+    return this.removeItemByName(`${resourceType}:${resourceID}`)
+      .return({});
+  }
+
+  /**
    * Retrieves all the items from a hash given its name. `HGETALL key`
    *
    * @argument itemKey
@@ -578,6 +630,33 @@ class NucleusDatastore {
 
     return this.$$server.multi(itemDatastoreRequestList).execAsync()
       .then(itemFields => itemFields.filter(Boolean).map(NucleusDatastore.parseHashItem));
+  }
+
+  /**
+   * Retrieves a resource given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceIDList = ['7e4a3ef0-348a-4386-a15d-440c21df9e99',  '28546678-0618-42d0-bb98-d8e865560871', 'fb8b74be-5975-49e5-86f4-373f2c41ea02'];
+   * const resourceList = await $datastore.retrieveBatchResourceByTypeAndIDList(resourceType, resourceIDList);
+   *
+   * resourceList.length === 3;
+   * resourceList[0].ID === resourceIDList[0];
+   * resourceList[0].type === resourceType;
+   * resourceList[1].ID === resourceIDList[1];
+   * resourceList[1].type === resourceType;
+   * resourceList[2].ID === resourceIDList[2];
+   * resourceList[2].type === resourceType;
+   *
+   * @argument {String} resourceType
+   * @argument {String[]} resourceIDList
+   *
+   * @returns {resourceList} - The list of resource object including the `ID` and `type` attributes.
+   */
+  retrieveBatchResourceByTypeAndIDList (resourceType, resourceIDList) {
+    const itemNameList = resourceIDList
+      .map((resourceID) => `${resourceType}:${resourceID}`);
+
+    return this.retrieveBatchItemByName(itemNameList);
   }
 
   /**
@@ -677,12 +756,32 @@ class NucleusDatastore {
   }
 
   /**
+   * Retrieves a resource given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resource = await $datastore.createResourceByTypeAndID(resourceType, resourceID);
+   *
+   * resource.ID === resourceID;
+   * resource.type === resourceType;
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   *
+   * @returns {Object} - The resource object including the `ID` and `type` attributes.
+   */
+  retrieveResourceByTypeAndID (resourceType, resourceID) {
+    
+    return this.retrieveAllItemsFromHashByName(`${resourceType}:${resourceID}`);
+  }
+
+  /**
    * Retrieves the any vector from any triple given the index scheme from a hexastore.
    * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
    *
    * @example
-   * async $datastore.addTripleToHexastore('ResourceRelationships', userID, 'isMember', userGroupID);
-   * const relationshipList = async $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationships', 'SOP', userID, userGroupID);
+   * await $datastore.addTripleToHexastore('ResourceRelationships', userID, 'isMember', userGroupID);
+   * const relationshipList = await $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationships', 'SOP', userID, userGroupID);
    *
    * @argument {String} itemName
    * @argument {String} indexingScheme=SPO,SOP,OPS,OSP,PSO,POS
@@ -833,6 +932,40 @@ class NucleusDatastore {
   }
 
   /**
+   * Updates a resource given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resourceAttributes = {
+   *   meta: {
+   *     createdISOTime: '2018-09-30T21:27:34.156Z'
+   *   },
+   *   fullName: 'Jane Doe'
+   * };
+   * const resource = await $datastore.updateResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
+   *
+   * resource.ID === resourceID;
+   * resource.type === resourceType;
+   * resource.fullName === resourceAttributes.fullName;
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   * @argument {Object} resourceAttributes
+   * @argument {Number} [TTL] - Time to expire the resource in seconds.
+   *
+   * @returns {Object} - The resource object including the `ID` and `type` attributes.
+   */
+  async updateResourceByTypeAndID (resourceType, resourceID, resourceAttributes, TTL) {
+    if (!resourceAttributes.hasOwnProperty('ID')) resourceAttributes.ID = resourceID;
+    if (!resourceAttributes.hasOwnProperty('type')) resourceAttributes.type = resourceType;
+
+    await this.addItemToHashFieldByName(`${resourceType}:${resourceID}`, resourceAttributes);
+    if (TTL) await this.$$server.expireAsync(`${resourceType}:${resourceID}`, TTL);
+
+    return resourceAttributes;
+  }
+
+  /**
    * Verifies that an item exists given its name.
    *
    * @argument {String} itemName
@@ -842,6 +975,25 @@ class NucleusDatastore {
   async verifyThatItemByNameExist (itemName) {
 
     return !!(await this.$$server.existsAsync(itemName));
+  }
+
+  /**
+   * Verifies that a resource exists given its type and ID.
+   * @example
+   * const resourceType = 'User';
+   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resourceExists = await $datastore.verifyThatResourceExistByTypeAndID(resourceType, resourceID);
+   *
+   * resourceExists === true;
+   *
+   * @argument {String} resourceType
+   * @argument {String} resourceID
+   *
+   * @returns {Boolean}
+   */
+  verifyThatResourceExistByTypeAndID (resourceType, resourceID) {
+
+    return this.verifyThatItemByNameExist(`${resourceType}:${resourceID}`);
   }
 
   /**
