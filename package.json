@@ -8,13 +8,16 @@
     "redis",
     "communication-protocol"
   ],
-  "author": "Sebastien Filion <sebastienfilion@mac.com>",
+  "author": "Sebastien Filion <sebastien@idexlabs.io>",
+  "contributors": [
+    "Julien Baillargeon <julbail13@gmail.com>"
+  ],
   "license": "MIT",
   "main": "index.js",
   "engines": {
     "node": ">=8.9"
   },
-  "repository": "git@github.com:sebastienfilion/idex.nucleus.git",
+  "repository": "git@github.com:idexlabs/idex.nucleus.core.git",
   "dependencies": {
     "bluebird": "^3.5.1",
     "jsdoc": "^3.5.5",
