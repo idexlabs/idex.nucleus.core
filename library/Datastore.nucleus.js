@@ -230,7 +230,8 @@ class NucleusDatastore {
 
     const stringifiedItem = NucleusDatastore.stringifyItem(item);
 
-    if (!!TTL) return this.$$server.setexAsync(itemKey, TTL, stringifiedItem);
+    if (!!TTL) return this.$$server.setexAsync(itemKey, TTL, stringifiedItem)
+      .return(item);
 
     return this.$$server.setAsync(itemKey, stringifiedItem)
       .return(item);
@@ -585,7 +586,7 @@ class NucleusDatastore {
    * @example
    * const resourceType = 'User';
    * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
-   * await $datastore.removeResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
+   * await $datastore.removeResourceByTypeAndID(resourceType, resourceID);
    *
    * @argument {String} resourceType
    * @argument {String} resourceID
@@ -760,7 +761,7 @@ class NucleusDatastore {
    * @example
    * const resourceType = 'User';
    * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
-   * const resource = await $datastore.createResourceByTypeAndID(resourceType, resourceID);
+   * const resource = await $datastore.retrieveResourceByTypeAndID(resourceType, resourceID);
    *
    * resource.ID === resourceID;
    * resource.type === resourceType;

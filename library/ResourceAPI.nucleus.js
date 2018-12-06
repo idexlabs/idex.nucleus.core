@@ -371,24 +371,32 @@ class NucleusResourceAPI {
 
     if (!canRetrieveResource) throw new NucleusError.UnauthorizedActionNucleusError(`The user ("${originUserID}") is not authorized to retrieve the ${resourceType} ("${resourceID}")`);
 
-    return Promise.all([
-      $datastore.retrieveResourceByTypeAndID(resourceType, resourceID),
-      $resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
-        ID: resourceID,
-        type: resourceType
-      })
-    ])
+    const $$requestList = [$datastore.retrieveResourceByTypeAndID(resourceType, resourceID)];
+
+    if (!!$resourceRelationshipDatastore) $$requestList.push($resourceRelationshipDatastore.retrieveAllRelationshipsForSubject({
+      ID: resourceID,
+      type: resourceType
+    }));
+
+    return Promise.all($$requestList)
       .then(([ resourceAttributes, nodeRelationshipList ]) => {
         const $resource = new NucleusResourceModel(resourceAttributes, originUserID);
-        const resourceRelationships = nodeRelationshipList
-          .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
-            if (!(relationship in accumulator)) accumulator[relationship] = [];
-            accumulator[relationship].push({ relationship, resourceID, resourceType });
 
-            return accumulator;
-          }, {});
+        const response = { resource: $resource };
 
-        return { resource: $resource, resourceRelationships };
+        if (!!nodeRelationshipList) {
+          const resourceRelationships = nodeRelationshipList
+            .reduce((accumulator, { predicate: relationship, object: { ID: resourceID, type: resourceType } }) => {
+              if (!(relationship in accumulator)) accumulator[relationship] = [];
+              accumulator[relationship].push({ relationship, resourceID, resourceType });
+
+              return accumulator;
+            }, {});
+
+          response.resourceRelationships = resourceRelationships;
+        }
+
+        return response;
       });
   }
 
