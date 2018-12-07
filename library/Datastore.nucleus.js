@@ -29,9 +29,17 @@ class NucleusDatastore {
   /**
    * Creates a Redis client. The constructor returns a Proxy that interfaces the class and a Promise that resolves once
    * the server is connected.
+   * @example
+   * const datastoreName = 'GameOfThrones';
+   * const $datastore = new NucleusDatastore(datastoreName);
+   *
+   * await $datastore.then(console.log.bind(console, "Datastore is connected and ready");
+   *
+   * await $datastore.ping();
    *
    * @argument {String} datastoreName
    * @argument {Object} options
+   * @argument {Number} [options.$logger=console]
    * @argument {Number} [options.index=0]
    * @argument {Number} [options.port=6379]
    * @argument {String} [options.URL="localhost"]
@@ -88,6 +96,23 @@ class NucleusDatastore {
 
   /**
    * Adds an item to a hash given a field and its key. `HMSET key field value`
+   * @example
+   * // Add one item to a specific field.
+   * const itemKey = 'JonSnow';
+   * const itemField = 'fullName';
+   * const item = 'Jon Snow';
+   * await $datastore.addItemToHashFieldByName(itemKey, itemField, item);
+   *
+   * // Add multiple items to multiple fields.
+   * const itemKey = 'JonSnow';
+   * const hashList = ['fullName', 'Jon Snow', 'father', 'Eddard Stark'];
+   * await $datastore.addItemToHashFieldByName(itemKey, itemField, item);
+   *
+   * // Add item to be serialized as JSON to a field.
+   * const itemKey = 'JonSnow';
+   * const itemField = 'sibblings';
+   * const item = [ 'Rickon Stark', 'Bran Stark', 'Arya Stark', 'Sansa Stark', 'Robb Stark' ];
+   * const storedHashList = await $datastore.addItemToHashFieldByName(itemKey, itemField, item);
    *
    * @argument {String} itemKey
    * @argument {String} [itemField]
@@ -135,9 +160,20 @@ class NucleusDatastore {
 
   /**
    * Adds an item to a list given its key. `LPUSH key value`
+   * @example
+   * // Add one item to the list.
+   * const itemKey = 'GreatHouseList';
+   * const item = 'Lannister';
+   * await $datastore.addItemToListByName(itemKey, item);
+   *
+   * // Add multiple items to the list.
+   * const itemKey = 'GreatHouseList';
+   * const itemList = [ 'Lannister', 'Tyrell', 'Arryn', 'Targaryen', 'Martell', 'Baratheon' ];
+   * await $datastore.addItemToListByName(itemKey, item);
    *
    * @argument {String} itemKey
-   * @argument {*|*[]} [itemList]
+   * @argument {*} [item]
+   * @argument {*[]} [itemList]
    *
    * @returns {Promise<*>}
    *
@@ -156,6 +192,10 @@ class NucleusDatastore {
 
   /**
    * Adds an item to a set. `SADD key value`
+   * @example
+   * const itemKey = 'WesterosKingSet';
+   * const item = 'Tommen Baratheon';
+   * await $datastore.addItemToSetByName(itemKey, item);
    *
    * @argument {String} itemKey
    * @argument {String} item
@@ -176,6 +216,13 @@ class NucleusDatastore {
 
   /**
    * Adds a triple to a hexastore.
+   * @example
+   * const itemKey = 'HouseStarkFamilyTree';
+   * const subject = 'Arya Stark'
+   * const predicate = 'is-daughter-of';
+   * const object = 'Cately Stark Tully;
+   * await $datastore.addTripleToHexastore(itemKey, subject, predicate, object);
+   *
    * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
    *
    * @argument {String} itemKey
@@ -196,15 +243,6 @@ class NucleusDatastore {
     if (!nucleusValidator.isString(predicate)) throw new NucleusError.UnexpectedValueTypeNucleusError("The predicate must be a string.");
     if (!nucleusValidator.isString(object)) throw new NucleusError.UnexpectedValueTypeNucleusError("The object must be a string.");
 
-    /*
-    ZADD myindex 0 spo:antirez:is-friend-of:matteocollina
-    ZADD myindex 0 sop:antirez:matteocollina:is-friend-of
-    ZADD myindex 0 ops:matteocollina:is-friend-of:antirez
-    ZADD myindex 0 osp:matteocollina:antirez:is-friend-of
-    ZADD myindex 0 pso:is-friend-of:antirez:matteocollina
-    ZADD myindex 0 pos:is-friend-of:matteocollina:antirez
-     */
-
     return this.$$server.multi()
       .zadd(itemKey, 0, `SPO:${subject}:${predicate}:${object}`)
       .zadd(itemKey, 0, `SOP:${subject}:${object}:${predicate}`)
@@ -217,9 +255,26 @@ class NucleusDatastore {
 
   /**
    * Creates an item. `SET key value`
+   * @example
+   * // Create an item from a primitive.
+   * const itemKey = 'HandOfTheKing';
+   * const item = 'Eddard Stark';
+   * await $datastore.createItem(itemKey, item);
+   *
+   * // Create an item from a data structure that will be serialize.
+   * const itemKey = 'HandOfTheKing';
+   * const item = { fullName: 'Eddard Stark' };
+   * await $datastore.createItem(itemKey, item);
+   *
+   * // Create an item with a time to live.
+   * const itemKey = 'HandOfTheKing';
+   * const item = 'Eddard Stark';
+   * const TTL = 60 * 60 * 54 + 56;
+   * await $datastore.createItem(itemKey, item, TTL);
    *
    * @argument {String} itemKey
    * @argument {*} item
+   * @argument TTL - Time to live in seconds.
    *
    * @returns {Promise<*>}
    *
@@ -240,13 +295,20 @@ class NucleusDatastore {
   /**
    * Creates a resource given its type and ID.
    * @example
-   * const resourceType = 'User';
+   * const resourceType = 'Character';
    * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
    * const resourceAttributes = {
    *   meta: {
    *     createdISOTime: '2018-09-30T21:27:34.156Z'
    *   },
-   *   fullName: 'John Doe'
+   *   fullName: 'Daenerys Targaryen',
+   *   titleList = [
+   *     'Queen of the Andals, the Rhoynar, and the First Men',
+   *     'Protector of the Seven Kingdoms',
+   *     'Khaleesi of the Great Grass Sea',
+   *     'Lady of Dragonstone',
+   *     'Queen of Meereen'
+   *   ]
    * };
    * const resource = await $datastore.createResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
    *
@@ -257,9 +319,9 @@ class NucleusDatastore {
    * @argument {String} resourceType
    * @argument {String} resourceID
    * @argument {Object} resourceAttributes
-   * @argument {Number} [TTL] - Time to expire the resource in seconds.
+   * @argument {Number} [TTL] - Time to live in seconds.
    *
-   * @returns {Object} - The resource object including the `ID` and `type` attributes.
+   * @returns {Promise<Object>>} - The resource object including the `ID` and `type` attributes.
    */
   async createResourceByTypeAndID (resourceType, resourceID, resourceAttributes, TTL) {
     if (!resourceAttributes.hasOwnProperty('ID')) resourceAttributes.ID = resourceID;
@@ -322,6 +384,12 @@ class NucleusDatastore {
 
   /**
    * Duplicates the connection.
+   * @example
+   * const $duplicateDatastore = $datastore('EventHandler');
+   *
+   * await $duplicateDatastore.then(console.log.bind(console, "Event Handler datastore is connected and ready");
+   *
+   * await $duplicateDatastore.ping();
    *
    * @argument {String} [datastoreName=`${this.name}Duplicate`]
    *
@@ -335,6 +403,15 @@ class NucleusDatastore {
 
   /**
    * Evaluates a LUA script.
+   * @example
+   * const LUAScript = `local pattern = ARGV[1]
+   * local itemKeyList = redis.call('KEYS', '*'..pattern..'*'
+   * for (index, itemKey in pairs(itemKeyList)) do
+   *   redis.call('DEL', itemKey)
+   * end
+   * return [];`
+   * const pattern = 'Martell';
+   * await $datastore.evaluateLUAScript(LUAScript, pattern);
    *
    * @argument {String} LUAScript
    * @argument {Array} argumentList
@@ -351,6 +428,13 @@ class NucleusDatastore {
   /**
    * Evaluates a LUA script given its name.
    * This assumes that the script was pre-loaded and its SHA ID has been stored.
+   * @example
+   * const LUAScriptName = 'RemoveGreatHouseByName';
+   * await $datastore.registerScriptByName(LUAScriptName, LUAScript);
+   *
+   * await $datastore.evaluateLUAScriptByName(LUAScriptName, 'Martell');
+   *
+   * @see {@link #registerScriptByName|NucleusDatastore#registerScriptByName}
    *
    * @argument {String} LUAScriptName
    * @argument {Array} argumentList
@@ -368,6 +452,7 @@ class NucleusDatastore {
   /**
    * Evaluates a LUA script given its SHA.
    * @see {@link https://redis.io/commands/eval}
+   * @see {@link #evaluateLUAScriptByName|NucleusDatastore#evaluateLUAScriptByName}
    *
    * @argument {String} LUAScriptSHA
    * @argument {String} argumentList
@@ -417,6 +502,10 @@ class NucleusDatastore {
 
   /**
    * Verifies if an item is part of a given item set.
+   * @example
+   * const itemKey = 'Targaryen';
+   * const item = 'Jon Snow';
+   * const { isMember } = await $datastore.itemIsMemberOfSet(itemKey, item);
    *
    * @argument {String} itemKey
    * @argument {String} item
@@ -494,21 +583,58 @@ class NucleusDatastore {
   }
 
   /**
-   * Registers a script given its name.
+   * Pings the Redis server. `PING message`
    *
-   * @argument {String} scriptName
-   * @argument {String} script
+   * @argument {String} message
+   *
+   * @returns {Promise}
+   */
+  ping (message) {
+
+    return this.$$server.pingAsync(message);
+  }
+
+  /**
+   * Registers a script given its name. `LOAD script`
+   * @example
+   * const LUAScriptName = 'RemoveGreatHouseByName';
+   * const LUAScript = `local pattern = ARGV[1]
+   * local itemKeyList = redis.call('KEYS', '*'..pattern..'*'
+   * for (index, itemKey in pairs(itemKeyList)) do
+   *   redis.call('DEL', itemKey)
+   * end
+   * return [];`
+   * await $datastore.registerScriptByName(LUAScriptName, LUAScript);
+   *
+   * @argument {String} LUAScriptName
+   * @argument {String} LUAScript
    *
    * @returns {Promise<*>}
    */
-  async registerScriptByName (scriptName, script) {
-    const scriptSHA = await this.$$server.scriptAsync('load', script);
+  async registerScriptByName (LUAScriptName, LUAScript) {
+    const scriptSHA = await this.$$server.scriptAsync('load', LUAScript);
 
-    this.scriptSHAbyScriptName[scriptName] = scriptSHA;
+    this.scriptSHAbyScriptName[LUAScriptName] = scriptSHA;
 
-    return this.addItemToHashFieldByName('LUAScriptSHAByScriptName', scriptName, scriptSHA);
+    return this.addItemToHashFieldByName('LUAScriptSHAByScriptName', LUAScriptName, scriptSHA);
   }
 
+  /**
+   * Removes a tripple from the hexastore.
+   * @example
+   * const itemKey = 'GreatHouseAllegiance';
+   * const subject = 'House Frey'
+   * const predicate = 'pledged-allegiance-to';
+   * const object = 'House Stark;
+   * await $datastore.removeTriplesFromHexastore(itemKey, subject, predicate, object);
+   *
+   * @argument {String} itemKey
+   * @argument {String} subject
+   * @argument {String} predicate
+   * @argument {String} object
+   *
+   * @returns {Promise}
+   */
   removeTriplesFromHexastore (itemKey, subject, predicate, object) {
     if (!nucleusValidator.isString(itemKey)) throw new NucleusError.UnexpectedValueTypeNucleusError("The item name must be a string.");
     if (!nucleusValidator.isString(subject)) throw new NucleusError.UnexpectedValueTypeNucleusError("The subject must be a string.");
@@ -528,6 +654,10 @@ class NucleusDatastore {
   /**
    * Removes a triple from a hexastore given the subject vector.
    * This will remove every relationship where the given vector is subject or object.
+   * @example
+   * const itemKey = 'GreatHouseAllegiance';
+   * const vector = 'House Martell'
+   * await $datastore.removeAllTriplesFromHexastoreByVector(itemKey, vector);
    *
    * @argument {String} itemKey
    * @argument {String} vector
@@ -548,6 +678,9 @@ class NucleusDatastore {
 
   /**
    * Removes an item given its key. `DEL key`
+   * @example
+   * const itemKey = 'HouseBolton';
+   * await $datastore.removeItemByName(itemKey);
    *
    * @argument {String} itemKey
    *
@@ -564,6 +697,10 @@ class NucleusDatastore {
 
   /**
    * Removes an item from a hash given a field. `HMDEL key field`
+   * @example
+   * const itemKey = 'JonSnow';
+   * const itemField = 'father';
+   * await $datastore.removeItemFromFieldByName(itemKey, itemField);
    *
    * @argument {String} itemKey
    * @argument {String} itemField
@@ -584,8 +721,8 @@ class NucleusDatastore {
   /**
    * Removes a resource given its type and ID.
    * @example
-   * const resourceType = 'User';
-   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resourceType = 'Character';
+   * const resourceID = '6d4500b6-b4aa-462a-b01b-a9bc19dbc699';
    * await $datastore.removeResourceByTypeAndID(resourceType, resourceID);
    *
    * @argument {String} resourceType
@@ -601,6 +738,10 @@ class NucleusDatastore {
 
   /**
    * Retrieves all the items from a hash given its name. `HGETALL key`
+   * @example
+   * const itemKey = 'JonSnow';
+   * const item = await $datastore.retrieveAllItemsFromHashByName(itemKey);
+   * item.fullName === 'Jon Snow';
    *
    * @argument itemKey
    *
@@ -617,6 +758,12 @@ class NucleusDatastore {
 
   /**
    * Retrieves a batch of items given a list of name.
+   * @example
+   * const itemNameList = [ 'RickonStark', 'BranStark', 'AryaStark', 'SansaStark', 'RobbStark' ];
+   * const resourceList = await $datastore.retrieveBatchItemByName(itemNameList);
+   *
+   * resourceList.length === 5;
+   * resourceList[0].fullName === 'Rickon Stark';
    *
    * @argument {String} itemNameList
    *
@@ -636,17 +783,20 @@ class NucleusDatastore {
   /**
    * Retrieves a resource given its type and ID.
    * @example
-   * const resourceType = 'User';
-   * const resourceIDList = ['7e4a3ef0-348a-4386-a15d-440c21df9e99',  '28546678-0618-42d0-bb98-d8e865560871', 'fb8b74be-5975-49e5-86f4-373f2c41ea02'];
+   * const resourceType = 'Character';
+   * const resourceIDList = ['7e4a3ef0-348a-4386-a15d-440c21df9e99',  '3c9e2e3e-86f6-4989-8f13-2a3d85a7403f', 'b3dce695-ae9a-48b0-82b3-579f5874e4d0'];
    * const resourceList = await $datastore.retrieveBatchResourceByTypeAndIDList(resourceType, resourceIDList);
    *
    * resourceList.length === 3;
    * resourceList[0].ID === resourceIDList[0];
    * resourceList[0].type === resourceType;
+   * resourceList[0].fullName === 'Daenerys Targaryen';
    * resourceList[1].ID === resourceIDList[1];
    * resourceList[1].type === resourceType;
+   * resourceList[1].fullName === 'Jon Snow';
    * resourceList[2].ID === resourceIDList[2];
    * resourceList[2].type === resourceType;
+   * resourceList[2].fullName === 'Tyrion Lannister';
    *
    * @argument {String} resourceType
    * @argument {String[]} resourceIDList
@@ -662,6 +812,11 @@ class NucleusDatastore {
 
   /**
    * Retrieves an item given its key. `GET key`
+   * @example
+   * const itemKey = 'WhatsYourName';
+   * const name = await $datastore.retrieveItemByName(itemKey);
+   *
+   * name === 'A Girl has no name.';
    *
    * @argument {String} itemKey
    *
@@ -677,7 +832,21 @@ class NucleusDatastore {
     }
 
   /**
-   * Remove an item from a hash given an item field. `HMDEL key field`
+   * Remove an item from a hash given an item field. `HMGET key field`
+   * @example
+   * // Retrieve on field.
+   * const itemKey = 'JonSnow';
+   * const itemField = 'father';
+   * const item = await $datastore.retrieveItemFromHashFieldByName(itemKey, itemField);
+   * item === 'Eddard Stark';
+   *
+   * // Retrieve multiple fields.
+   * const itemKey = 'JonSnow';
+   * const itemFieldList = ['fullName', 'father'];
+   * const [ fullName, father ] = await $datastore.retrieveItemFromHashFieldByName(itemKey, itemFieldList);
+   *
+   * fullName === 'Jon Snow';
+   * father === 'Eddard Stark';
    *
    * @argument {String} itemKey
    * @argument {String} [itemField]
@@ -706,6 +875,12 @@ class NucleusDatastore {
 
   /**
    * Retrieves an item from a list but blocks the client if the list is empty. `BRPOP key timeout`
+   * @example
+   * const itemKey = 'WhatIsComing';
+   * const item = await $datastore.retrieveItemFromListDeferred(itemKey);
+   * // Connection and thread will be blocked until an item is pushed to the list.
+   * // You should never user `await` with this method on the main thread.
+   * await $datastore.addItemToListByName(itemKey, 'Winter');
    *
    * @argument {String} itemKey
    *
@@ -740,6 +915,12 @@ class NucleusDatastore {
 
   /**
    * Retrieves the relationship between a subject and an object from a hexastore.
+   * const itemName = 'HouseTargeryanFamilyTree';
+   * const subject = 'Daenarys Targeryan';
+   * const object = 'Aerys II Targaryen';
+   * const relationshipList = await $datastore.retrieveRelationshipListFromHexastore(itemName, subject, object);
+   *
+   * relationshipList[0] === 'is-daughter-of';
    *
    * @argument {String} itemName
    * @argument {String} subject
@@ -749,22 +930,19 @@ class NucleusDatastore {
    */
   retrieveRelationshipListFromHexastore (itemName, subject, object) {
 
-    return this.retrieveVectorByIndexSchemeFromHexastore(itemName, 'SOP', subject, object)
-      .then((relationshipList) => {
-
-        return { relationshipList };
-      });
+    return this.retrieveVectorByIndexSchemeFromHexastore(itemName, 'SOP', subject, object);
   }
 
   /**
    * Retrieves a resource given its type and ID.
    * @example
-   * const resourceType = 'User';
+   * const resourceType = 'Character';
    * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
    * const resource = await $datastore.retrieveResourceByTypeAndID(resourceType, resourceID);
    *
    * resource.ID === resourceID;
    * resource.type === resourceType;
+   * resource.fullName === 'Daenarys Targeryan';
    *
    * @argument {String} resourceType
    * @argument {String} resourceID
@@ -781,8 +959,15 @@ class NucleusDatastore {
    * @see {@link http://www.vldb.org/pvldb/1/1453965.pdf|Hexastore paper}
    *
    * @example
-   * await $datastore.addTripleToHexastore('ResourceRelationships', userID, 'isMember', userGroupID);
-   * const relationshipList = await $datastore.retrieveVectorByIndexSchemeFromHexastore('ResourceRelationships', 'SOP', userID, userGroupID);
+   * const itemName = 'HouseTargeryanFamilyTree';
+   * const object = 'Daenarys Targeryan';
+   * const predicate = 'is-children-of';
+   * const itemList = await $datastore.retrieveVectorByIndexSchemeFromHexastore(itemName, 'OPS', object, predicate);
+   *
+   * itemList.length === 3;
+   * itemList[0].fullName === 'Drogon';
+   * itemList[1].fullName === 'Rhaegal';
+   * itemList[2].fullName === 'Viserion';
    *
    * @argument {String} itemName
    * @argument {String} indexingScheme=SPO,SOP,OPS,OSP,PSO,POS
@@ -935,19 +1120,16 @@ class NucleusDatastore {
   /**
    * Updates a resource given its type and ID.
    * @example
-   * const resourceType = 'User';
-   * const resourceID = '7e4a3ef0-348a-4386-a15d-440c21df9e99';
+   * const resourceType = 'Character';
+   * const resourceID = '3c9e2e3e-86f6-4989-8f13-2a3d85a7403f';
    * const resourceAttributes = {
-   *   meta: {
-   *     createdISOTime: '2018-09-30T21:27:34.156Z'
-   *   },
-   *   fullName: 'Jane Doe'
+   *   father: 'Rhaegar Targaryen'
    * };
    * const resource = await $datastore.updateResourceByTypeAndID(resourceType, resourceID, resourceAttributes);
    *
    * resource.ID === resourceID;
    * resource.type === resourceType;
-   * resource.fullName === resourceAttributes.fullName;
+   * resource.father === resourceAttributes.father;
    *
    * @argument {String} resourceType
    * @argument {String} resourceID

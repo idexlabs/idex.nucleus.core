@@ -885,7 +885,7 @@ return { itemIDA, itemIDB, itemIDC }
 
             return $datastore.retrieveRelationshipListFromHexastore(itemKey, subject, object);
           })
-          .then(({ relationshipList }) => {
+          .then((relationshipList) => {
             chai.expect(relationshipList).to.have.length(1);
             chai.expect(relationshipList[0]).to.equal(predicate);
           });
