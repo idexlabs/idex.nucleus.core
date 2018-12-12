@@ -62,7 +62,7 @@ and events.
 You can create an engine by simply instantiating the `NucleusEngine` class:
 
 ```javascript
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 const $engine = new NucleusEngine('Test');
 
@@ -78,9 +78,9 @@ $engine
 ```
 
 Checkout the tutorials for your first steps:
-  1. [Create a basic engine](https://github.com/sebastienfilion/idex.nucleus/wiki/Tutorial-Create-a-basic-engine)
-  2. [Create a basic API with public Gateway](https://github.com/sebastienfilion/idex.nucleus/wiki/Tutorial-Create-a-basic-API-with-public-gateway)
-  3. [Create a persistent storage API](https://github.com/sebastienfilion/idex.nucleus/wiki/Tutorial-Create-a-persistent-storage-API)
+  1. [Create a basic engine](https://github.com/idexlabs/idex.nucleus.core/wiki/Tutorial-Create-a-basic-engine)
+  2. [Create a basic API with public Gateway](https://github.com/idexlabs/idex.nucleus.core/wiki/Tutorial-Create-a-basic-API-with-public-gateway)
+  3. [Create a persistent storage API](https://github.com/idexlabs/idex.nucleus.core/wiki/Tutorial-Create-a-persistent-storage-API)
 
 
 ## License
@@ -109,7 +109,7 @@ SOFTWARE.
 
 ## Contributing 
 
-  1. Fork it (https://github.com/sebastienfilion/idex.nucleus/fork)
+  1. Fork it (https://github.com/idexlabs/idex.nucleus.core/fork)
   2. Create your feature branch (`git checkout -b feature/foo-bar`)
   3. Commit your changes (`git commit -am 'Add some fooBar'`)
   4. Push to the branch (`git push origin feature/food-bar`)

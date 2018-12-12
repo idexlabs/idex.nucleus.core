@@ -115,7 +115,7 @@ option `automaticallyAutodiscover` to `true`.
 // Dummy/Dummy.engine.js
 "use strict";
 
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 class DummyEngine extends NucleusEngine {
   constructor(options = {}) {
@@ -174,7 +174,7 @@ as `engineDirectoryPath`.
 
 ```javascript
 // Dummy/Dummy.engine.js
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 class DummyEngine extends NucleusEngine {
   constructor(options = {}) {

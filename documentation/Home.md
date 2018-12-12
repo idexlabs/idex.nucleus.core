@@ -25,7 +25,7 @@ and events.
 You can create an engine by simply instantiating the `NucleusEngine` class:
 
 ```javascript
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 const $engine = new NucleusEngine('Test');
 

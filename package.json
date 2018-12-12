@@ -3,10 +3,26 @@
   "version": "0.10.4",
   "description": "A flexible library to implement a distributed micro-service(-like) architecture in NodeJS.",
   "keywords": [
+    "architecture",
+    "cms",
+    "cms-framework",
+    "communication",
+    "communication-protocol",
+    "dataflow",
+    "engine",
+    "flexible",
+    "flexible-library",
+    "framework",
+    "graph",
+    "idex-nucleus",
     "library",
     "microservice",
-    "redis",
-    "communication-protocol"
+    "nodejs",
+    "nucleus",
+    "nucleus-engine",
+    "persistence-api",
+    "persistence-framework",
+    "redis"
   ],
   "author": "Sebastien Filion <sebastien@idexlabs.io>",
   "contributors": [

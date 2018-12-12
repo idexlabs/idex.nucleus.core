@@ -10,7 +10,7 @@ You can extend the Nucleus engine like any other class and add [actions](./Guide
 In the following example, you will learn how to create a Ping engine that has only one action called "Ping" and how to call it.
 
 ```javascript
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 // Extend the Nucleus engine to create the Ping engine.
 class PingEngine extends NucleusEngine {

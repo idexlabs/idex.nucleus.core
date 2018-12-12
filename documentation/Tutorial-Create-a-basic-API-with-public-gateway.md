@@ -32,7 +32,7 @@ This will tell the engine to use [autodiscovery](./Guide-Autodiscovery) and to a
 
 "use strict";
 
-const { NucleusEngine } = require('idex.nucleus');
+const { NucleusEngine } = require('@idex/nucleus.core');
 
 class CoreEngine extends NucleusEngine {
 
@@ -151,7 +151,7 @@ const express = require('express');
 const http = require('http');
 const uuid = require('uuid');
 
-const { NucleusPublisherEngine } = require('idex.nucleus');
+const { NucleusPublisherEngine } = require('@idex/nucleus.core');
 
 const HTTP_PORT = 3000;
 
