@@ -15,6 +15,7 @@ const uuid = require('uuid');
 
 const NucleusAction = require('./Action.nucleus');
 const NucleusDatastore = require('./Datastore.nucleus');
+const NucleusDeferredClassProxy = require('./DeferredClassProxy.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
 const NucleusResource = require('./Resource.nucleus');
@@ -49,7 +50,7 @@ const $$javascriptReservedWordRegularExpressionList = [
 // The issue is caused mostly by how the requests get parallelized,
 // One way to resolve this might be to create more redis connection on the fly.
 
-class NucleusEngine {
+class NucleusEngine extends NucleusDeferredClassProxy {
 
   /**
    * Creates a Nucleus engine. The constructor returns a Proxy that interfaces the class and a Promise that resolves once
@@ -85,6 +86,8 @@ class NucleusEngine {
       defautlActionHangupTimeout = 1000 * 5,
       defaultActionQueueName = engineName
     } = options;
+
+    super();
 
     /** @member {String} ID */
     Reflect.defineProperty(this, 'ID', { value: uuid.v1(), writable: false });
@@ -142,18 +145,6 @@ class NucleusEngine {
       .then(() => {
         this.$logger.info(`The ${this.name} engine has successfully initialized.`);
       });
-
-    const $$proxy = new Proxy(this, {
-      get: function (object, property) {
-        if (property in object) return (typeof object[property] === 'function') ? object[property].bind(object) : object[property];
-        else if (property in object.$$promise) {
-          return (typeof object.$$promise[property] === 'function') ? object.$$promise[property].bind(object.$$promise) : object.$$promise[property];
-        }
-        else undefined;
-      }
-    });
-
-    return $$proxy;
   }
 
   /**

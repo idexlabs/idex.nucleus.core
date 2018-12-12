@@ -11,6 +11,7 @@ const path = require('path');
 const Promise = require('bluebird');
 const redis = require('redis');
 
+const NucleusDeferredClassProxy = require('./DeferredClassProxy.nucleus');
 const NucleusError = require('./Error.nucleus');
 const NucleusEvent = require('./Event.nucleus');
 
@@ -24,7 +25,7 @@ const $$dotNotationKeyRegularExpression = /[A-Za-z0-9-_$](([[0-9]+])|(\.[A-Za-z0
 const $$keyspaceNotificationChannelNameRegularExpression = new RegExp('__keyspace@[0-9]__:.*|__keyevent@[0-9]__:.*');
 const $$predicateRegularExpression = new RegExp('SOP\\:[A-Za-z0-9\\-]+\\:[A-Za-z0-9\\-]+\\:([A-Za-z0-9\\-]+)');
 
-class NucleusDatastore {
+class NucleusDatastore extends NucleusDeferredClassProxy {
 
   /**
    * Creates a Redis client. The constructor returns a Proxy that interfaces the class and a Promise that resolves once
@@ -53,6 +54,8 @@ class NucleusDatastore {
       port: datastorePort = 6379,
       URL: datastoreURL = 'localhost'
     } = options;
+
+    super();
 
     this.name = datastoreName;
     this.type = 'Redis';
