@@ -97,9 +97,17 @@ const isString = (value) => {
  */
 const shiftFirstLetterToLowerCase = (string) => {
 
-  return string.replace(new RegExp('^\\${0,1}([A-Z])(?![A-Z]{2,})'), (match) => {
+  return string.replace(new RegExp('^\\${0,2}([A-Z])(?![A-Z]{2,})'), (match) => {
 
     return match.toLowerCase();
+  });
+};
+
+const shiftFirstLetterToUpperCase = (string) => {
+
+  return string.replace(new RegExp('^\\${0,2}([a-z])'), (match) => {
+
+    return match.toUpperCase();
   });
 };
 
@@ -119,6 +127,7 @@ module.exports = {
   isString,
   pascalCaseRegularExpression,
   shiftFirstLetterToLowerCase,
+  shiftFirstLetterToUpperCase,
   struct,
   UUIDRegularExpression
 };
