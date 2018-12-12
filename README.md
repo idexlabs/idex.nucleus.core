@@ -2,7 +2,7 @@
 
 Nucleus is a flexible library that offers tools to implement a distributed micro-service(-like) architecture in NodeJS.
 
-[![npm version](https://badge.fury.io/js/idex.nucleus.svg)](https://badge.fury.io/js/idex.nucleus)
+[![npm version](https://badge.fury.io/js/%40idex%2Fnucleus.core.svg)](https://badge.fury.io/js/%40idex%2Fnucleus.core)
 
 IDEX Nucleus Core is the framework to build flexible, scalable and structured back-end architecture. 
 It includes:  
